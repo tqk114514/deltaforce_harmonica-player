@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>口琴简谱编辑器</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e3e6ea;
+    --text: #1a1d21;
+    --muted: #5b6470;
+    --accent: #1d4ed8;
+    --accent-soft: #e8efff;
+    --warn: #b45309;
+    --bar: #9aa3ad;
+    /* 音符盒子的尺寸。减时线连写要按它们算两个音符之间的空隙宽度，
+       所以抽成变量，改 padding/gap 时连写不会错位 */
+    --note-pad-x: 7px;
+    --note-border: 1px;
+    --note-gap: 3px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 24px 40px;
+    font-family: "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  h1 { font-size: 17px; margin: 0 0 14px; font-weight: 600; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+  }
+  .row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .label { font-size: 12px; color: var(--muted); min-width: 44px; }
+  button {
+    font-family: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; border-radius: 6px; color: var(--text);
+  }
+  button:hover { background: #f2f4f6; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.ghost { border-style: dashed; color: var(--muted); }
+  select {
+    font-family: inherit; font-size: 13px; padding: 6px 8px;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  input[type=text], input[type=number] {
+    font-family: inherit; font-size: 13px; padding: 6px 8px;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text);
+  }
+  input[type=text] { width: 150px; }
+  input[type=number] { width: 68px; }
+
+  #scoreWrap { position: relative; }
+  #score {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 0;
+    min-height: 148px; padding: 26px 4px 10px; line-height: 1;
+  }
+  /* 一个小节一个容器，换行只发生在小节边界，小节内部不会被拆开 */
+  .measure {
+    display: flex; align-items: flex-end; gap: 2px var(--note-gap);
+    padding: 0 9px 0 3px;
+    border-right: 1px solid var(--bar);
+  }
+  .measure:last-child { border-right: none; }
+  .measure.plain { border-right: none; padding-right: 14px; }
+  #ties { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+
+  .note {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+    padding: 6px var(--note-pad-x) 8px; border-radius: 6px; cursor: pointer;
+    border: var(--note-border) solid transparent; user-select: none; min-width: 30px;
+  }
+  .note:hover { background: #f2f4f6; }
+  .note.sel { background: var(--accent-soft); border-color: var(--accent); }
+  .note.tieA { box-shadow: inset 0 0 0 2px var(--accent); }
+  /* 高八度点画在数字上方。超高音是两个点竖排（和简谱一致）；
+     高度固定 + 底部对齐，所以不管几个点都不会把数字顶下去。 */
+  .note .top {
+    height: 22px; display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: center;
+    font-size: 13px; line-height: 11px; color: var(--text);
+  }
+  .note .bot { height: 12px; font-size: 15px; line-height: 12px; color: var(--text); }
+  .note .num { font-size: 22px; line-height: 26px; position: relative; padding: 0 2px; }
+  .note .num .sharp { font-size: 13px; vertical-align: top; margin-right: 1px; }
+  .note .num .dot {
+    position: absolute; right: -8px; bottom: 1px;
+    font-size: 15px; line-height: 1;
+  }
+  /* 倚音：主音数字左上角的小音符。绝对定位，不参与布局，不会挤动主音的位置。
+     自上而下依次是：八度点 / 数字 / 减时线 / 低八度点 / 指向主音的折线指示器。 */
+  .note .num .grace {
+    position: absolute; left: -15px; top: -11px;
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 13px; line-height: 13px; color: var(--muted);
+  }
+  .note .num .grace .gtop,
+  .note .num .grace .gbot {
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 9px; line-height: 6px;
+  }
+  .note .num .grace .glines {
+    display: flex; flex-direction: column; gap: 2px; width: 100%; margin-top: 1px;
+  }
+  .note .num .grace .glines i { display: block; height: 1px; background: var(--muted); }
+  /* 指示器：竖线顶在减时线正中间，到下面再向右拐一小段指向主音。
+     用 ::before/::after 而不是边框，这样竖线能精确落在 50% 处。 */
+  .note .num .grace .gptr {
+    position: relative; width: 100%; height: 7px;
+  }
+  .note .num .grace .gptr::before {
+    content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
+    width: 1px; background: var(--muted);
+  }
+  .note .num .grace .gptr::after {
+    content: ''; position: absolute; left: 50%; bottom: 0;
+    width: 5px; height: 1px; background: var(--muted);
+  }
+  /* 减时线：单个音符的线和数字同宽，就是 .lines 的 100%，不加宽 */
+  .note .lines { height: 9px; width: 100%; display: flex; flex-direction: column;
+                 justify-content: space-between; padding-top: 3px; }
+  .note .lines i { display: block; height: 1.5px; background: var(--text); border-radius: 1px; }
+  /* 和左边相邻音符有同一层减时线时，这条线向左延伸，补上
+     「左音符的右内边距+右边框 + 音符间距 + 自己的左边框+左内边距」这段空隙，
+     两段线就接成一条。多伸 2px 是为了盖住两端的圆角，接缝不留白。
+     没有 link 的音符，线宽一点不变。 */
+  .note .lines i.link {
+    --join: calc(2 * (var(--note-pad-x) + var(--note-border)) + var(--note-gap) + 2px);
+    margin-left: calc(-1 * var(--join));
+    width: calc(100% + var(--join));
+  }
+  .note.rest .num { color: var(--muted); }
+  .hold {
+    align-self: center; font-size: 19px; color: var(--text);
+    padding: 0 3px 6px; line-height: 1;
+  }
+  .note .modmark { font-size: 10px; line-height: 12px; color: var(--accent); }
+  .mark {
+    align-self: center; font-size: 15px; color: var(--text);
+    padding: 0 3px 6px; line-height: 1; letter-spacing: -1px;
+  }
+  .mark.auto { color: var(--muted); }
+  .barnum {
+    align-self: flex-start; font-size: 10px; color: var(--bar);
+    min-width: 11px; margin: 0 2px 0 0;
+  }
+
+  .hint { font-size: 12px; color: var(--muted); line-height: 2; }
+  .hint kbd {
+    display: inline-block; padding: 0 5px; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 4px; background: #fafbfc;
+    font-family: Consolas, monospace; font-size: 11px; color: #3a4149;
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+  #out {
+    width: 100%; height: 150px; margin-top: 10px; padding: 10px;
+    font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.6;
+    border: 1px solid var(--line); border-radius: 8px; background: #fafbfc;
+    color: #2b3138; resize: vertical;
+  }
+  .status { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+  .warn { color: var(--warn); }
+
+  /* 倚音弹窗 */
+  dialog {
+    border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+    background: var(--panel); color: var(--text); min-width: 430px;
+    font-family: inherit; font-size: 13px;
+  }
+  dialog::backdrop { background: rgba(20, 24, 30, .35); }
+  dialog h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .dlgSub { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; }
+  .dlgRow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .dlgRow .label { min-width: 40px; }
+  .dlgPreview {
+    font-size: 13px; color: var(--accent); margin: 14px 0 0;
+    padding: 8px 10px; background: var(--accent-soft); border-radius: 6px; min-height: 18px;
+  }
+  .dlgBtns { display: flex; gap: 8px; margin-top: 16px; }
+  .dlgBtns .spacer { flex: 1; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #1a45c0; }
+  button:disabled { opacity: .35; cursor: default; }
+  button:disabled:hover { background: #fff; }
+</style>
+</head>
+<body>
+
+<h1>口琴简谱编辑器</h1>
+
+<div class="panel">
+  <div id="scoreWrap">
+    <svg id="ties" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="score"></div>
+  </div>
+  <div class="hint" style="margin-top:12px">
+    <b>谱面上的记号</b>：
+    数字下方的横线是<b>减时线</b>，一条表示时值减半（八分），两条是十六分，三条是三十二分；
+    数字右边的横杠 <b>-</b> 是<b>增时线</b>，表示把这个音再延长一拍；
+    数字右边的小圆点是<b>附点</b>，时值乘 1.5；
+    音符之间的竖线是<b>小节线</b>；数字上方的弧线是<b>连音线</b>。<br>
+    连音线有两种：<b>延音线</b>——连的是紧挨着的、音高相同的音，演奏时合并成一个长音；
+    <b>圆滑线</b>——连的是跨音或音高不同的音，只画在谱面上做标记，不改变演奏。
+    同一个音可以同时连多个（比如一个 7 既连后面的 7，又跨过去连 6）。<br>
+    数字<b>左上角的小音符</b>是<b>倚音</b>：演奏时它先响，占主音前面很短的一点时间。
+  </div>
+  <div class="hint" style="margin-top:10px">
+    <kbd>1</kbd>–<kbd>7</kbd> 输入音符　<kbd>0</kbd> 休止　<kbd>#</kbd> 升号　
+    <kbd>-</kbd> 延长一拍　<kbd>↑</kbd><kbd>↓</kbd> 换八度　<kbd>←</kbd><kbd>→</kbd> 换时值<br>
+    工具栏还有 <b>‖: 反复</b>（把这个段落再吹一遍）、<b>转调</b>（整体升降若干半音）
+    和 <b>倚音</b>（点开面板选音高/八度/时值；倚音先响，占主音前面一点时间）<br>
+    <kbd>点击</kbd> 选中音符（工具栏会跟着变成它的时值和八度）　
+    <kbd>Backspace</kbd> 删除　<kbd>t</kbd> 连音线　<kbd>Esc</kbd> 取消选中
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <span class="label">时值</span>
+    <button data-dur="4">四分 1拍</button>
+    <button data-dur="8">八分 ½</button>
+    <button data-dur="16">十六分 ¼</button>
+    <button data-dur="32">三十二分 ⅛</button>
+    <button id="btnDot">附点 ×1.5</button>
+    <button id="btnHold" title="相当于在音符后面画一条横杠「-」">延长一拍 -</button>
+  </div>
+  <div class="row">
+    <span class="label">八度</span>
+    <button data-oct="-1">低音 下加点</button>
+    <button data-oct="0">中音</button>
+    <button data-oct="1">高音 上加点</button>
+    <button data-oct="2">超高音 上两点</button>
+    <button id="btnSharp">升号 #</button>
+  </div>
+  <div class="row">
+    <span class="label">选中音</span>
+    <button id="btnTie" title="先点一个音作起点，再点终点。同一个音可以连多个目标">连音线</button>
+    <button id="btnDel">删除</button>
+    <button id="btnLeft">左移</button>
+    <button id="btnRight">右移</button>
+    <button id="btnRStart" title="从选中的这个音开始反复">‖: 反复开始</button>
+    <button id="btnREnd" title="选中的这个音是反复段的结尾">:‖ 反复结束</button>
+    <button id="btnMod" title="点这一小节里的任意音符，然后把谱面上的「前3=后5」抄进去即可">转调</button>
+    <button id="btnGrace" title="给选中的音符加倚音（画成左上角的小音符）。点一下填倚音的音位，再点一下取消">倚音</button>
+    <span class="label">拍号</span>
+    <select id="meter">
+      <option value="4">4/4</option>
+      <option value="3">3/4</option>
+      <option value="2">2/4</option>
+      <option value="0">不画小节线</option>
+    </select>
+    <span class="status" id="status">没有选中音符</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <span class="label">文件</span>
+    <button id="btnOpen">打开</button>
+    <button id="btnSaveFile">保存</button>
+    <input type="file" id="fileInput" accept=".json,.dhs,.txt" style="display:none">
+    <span class="status" id="fileStatus">保存的是完整工程（连音线、反复、转调都在）；打开 .dhs 只能恢复音符</span>
+  </div>
+  <div class="row">
+    <span class="label">标题</span>
+    <input type="text" id="title" value="我的曲子">
+    <span class="label">BPM</span>
+    <input type="number" id="bpm" value="120" min="40" max="240">
+    <button id="btnPlay">试听</button>
+    <button id="btnStop">停止</button>
+    <button id="btnClear" class="ghost">清空</button>
+    <button id="btnExport">生成 .dhs</button>
+    <button id="btnCopy" class="ghost">复制</button>
+    <button id="btnDownload" class="ghost">下载文件</button>
+    <span class="status" id="count"></span>
+  </div>
+  <textarea id="out" spellcheck="false" placeholder="点「生成 .dhs」后这里会出现谱面文本，可以直接贴进 songs/ 目录保存成 .dhs 文件"></textarea>
+  <div class="hint" style="margin-top:8px">
+    谱子会自动存在本浏览器里，关掉页面再打开还在。换浏览器或清缓存会丢。
+  </div>
+</div>
+
+<dialog id="graceDlg">
+  <h2>倚音</h2>
+  <p class="dlgSub" id="graceSub"></p>
+
+  <div class="dlgRow">
+    <span class="label">音高</span>
+    <button class="gDeg" data-deg="1">1</button>
+    <button class="gDeg" data-deg="2">2</button>
+    <button class="gDeg" data-deg="3">3</button>
+    <button class="gDeg" data-deg="4">4</button>
+    <button class="gDeg" data-deg="5">5</button>
+    <button class="gDeg" data-deg="6">6</button>
+    <button class="gDeg" data-deg="7">7</button>
+    <button id="gSharp">升号 #</button>
+  </div>
+  <div class="dlgRow">
+    <span class="label">八度</span>
+    <button class="gOct" data-oct="-1">低音 下加点</button>
+    <button class="gOct" data-oct="0">中音</button>
+    <button class="gOct" data-oct="1">高音 上加点</button>
+    <button class="gOct" data-oct="2">超高音 上两点</button>
+  </div>
+  <div class="dlgRow">
+    <span class="label">时值</span>
+    <button class="gDur" data-dur="8">八分</button>
+    <button class="gDur" data-dur="16">十六分</button>
+    <button class="gDur" data-dur="32">三十二分</button>
+  </div>
+
+  <p class="dlgPreview" id="gracePreview"></p>
+
+  <div class="dlgBtns">
+    <button id="gDel" class="ghost">删除倚音</button>
+    <span class="spacer"></span>
+    <button id="gCancel">取消</button>
+    <button id="gOk" class="primary">确定</button>
+  </div>
+</dialog>
+
+<script>
+// 一个 tick = 1/24 拍，够表示十六分音符和附点
+const TICKS_PER_BEAT = 24;
+const SEMITONE = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+const STORE_KEY = 'harmonica-score-v1';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const state = {
+  notes: [],
+  selected: -1,
+  tieFrom: -1,   // 连音线起点音符，-1 表示不在连线状态
+  cur: { dur: 4, dot: false, sharp: false, octave: 0 },
+};
+
+const $ = (id) => document.getElementById(id);
+const scoreEl = $('score');
+const tiesEl = $('ties');
+let noteEls = [];
+
+// 一个音符的总时值 = 基本时值（含附点）+ 增时线
+function ticksOf(n) {
+  const base = TICKS_PER_BEAT * 4 / n.dur;
+  return Math.round(base * (n.dot ? 1.5 : 1)) + (n.hold || 0);
+}
+function beatsOf(n) { return ticksOf(n) / TICKS_PER_BEAT; }
+function regOf(octave) {
+  return octave <= -1 ? 'L' : octave === 0 ? 'M' : octave === 1 ? 'H' : 'T';
+}
+
+// 时值（4/8/16/32 分音符）换算成 tick 数
+function ticksForDur(dur) {
+  return Math.round(TICKS_PER_BEAT * 4 / dur);
+}
+
+// 倚音实际占几个 tick：按它自己的时值算，但不超过主音时值的一半
+// —— 倚音是从主音借时间的，借多了主音就没声了。
+function graceTicksOf(n) {
+  if (!n.grace) return 0;
+  const total = n.totalTicks !== undefined ? n.totalTicks : ticksOf(n);
+  return Math.min(ticksForDur(n.grace.dur || 16), Math.floor(total / 2));
+}
+
+// 音位 -> 给人看的短标签：6 / 低7 / 高3# / 超高1
+function pitchLabel(p) {
+  const reg = p.octave <= -1 ? '低' : p.octave === 1 ? '高' : p.octave >= 2 ? '超高' : '';
+  return `${reg}${p.octave >= 2 ? 1 : p.degree}${p.sharp ? '#' : ''}`;
+}
+
+// 倚音的完整描述：高1（十六分）
+function graceLabel(g) {
+  const durName = { 4: '四分', 8: '八分', 16: '十六分', 32: '三十二分' }[g.dur] || '十六分';
+  return `${pitchLabel(g)}（${durName}）`;
+}
+
+// 倚音下方画几条减时线：八分 1 条、十六分 2 条、三十二分 3 条
+function graceLineCount(dur) {
+  return dur === 32 ? 3 : dur === 16 ? 2 : 1;
+}
+function samePitch(a, b) {
+  return a.degree === b.degree && a.octave === b.octave && a.sharp === b.sharp;
+}
+
+// 一个音可以连多个目标（7 既连后面的 7，又跨过去连 6）。
+// 其中只有"连到紧邻的下一个音、且音高相同"才合并时值，那是延音线；
+// 其它连法（跨音、音高不同）是圆滑线，只画在谱面上，不改变演奏。
+function linkMerges(notes, from, to) {
+  const a = notes[from], b = notes[to];
+  return !!a && !!b && to === from + 1 && !a.rest && !b.rest && samePitch(a, b);
+}
+
+function tiesOf(n) {
+  return Array.isArray(n.ties) ? n.ties : [];
+}
+
+// 连音线合并：导出和试听共用
+function mergeTies(notes) {
+  const merged = [];
+  notes.forEach((n, i) => {
+    const prev = merged[merged.length - 1];
+    // 看"前一个原始音符"有没有连到当前这个音。
+    // 不能看 prev 自己的 ties：合并后 prev 代表的是整串的开头，
+    // 那样 7-7-7 这种一路连到第三个音就断了。
+    const prevSource = i > 0 ? notes[i - 1] : null;
+    const joins = prev && prevSource &&
+                  tiesOf(prevSource).includes(i) && linkMerges(notes, i - 1, i);
+    if (joins) {
+      prev.totalTicks += ticksOf(n);
+      return;
+    }
+    merged.push(Object.assign({}, n, { totalTicks: ticksOf(n) }));
+  });
+  return merged;
+}
+
+// ---------------------------------------------------------------- 反复与转调
+
+// 十二平均律：半音编号 -> 简谱度数 + 是否升号
+const PC_TO_DEGREE = [
+  [1, false], [1, true], [2, false], [2, true], [3, false], [4, false],
+  [4, true], [5, false], [5, true], [6, false], [6, true], [7, false],
+];
+const DEGREE_TO_PC = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+
+// 音位 -> MIDI 音高（M1 = C4 = 60）
+function pitchToMidi(n) {
+  const degree = n.octave >= 2 ? 1 : n.degree;
+  return 60 + n.octave * 12 + DEGREE_TO_PC[degree] + (n.sharp ? 1 : 0);
+}
+
+// MIDI 音高 -> 音位，超出音域就按八度折回来
+function midiToPitch(midi) {
+  while (midi < 48) midi += 12;   // 低于 C3
+  while (midi > 84) midi -= 12;   // 高于 C6
+  const pc = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  let [degree, sharp] = PC_TO_DEGREE[pc];
+  let reg;
+  if (octave <= 3) reg = -1;
+  else if (octave === 4) reg = 0;
+  else if (octave === 5) reg = 1;
+  else { reg = 2; degree = 1; sharp = false; }   // 超高音区只有 do
+  return { degree, sharp, octave: reg };
+}
+
+// 抄一段到 out 末尾（去掉反复记号本身，免得嵌套；连音线索引映射到副本上）
+function copySegment(notes, out, from, to) {
+  const base = out.length;
+  for (let k = from; k <= to; k++) {
+    const src = notes[k];
+    const copy = Object.assign({}, src, { rstart: false, rend: false });
+    copy.ties = tiesOf(src)
+      .filter(t => t >= from && t <= to)
+      .map(t => base + (t - from));
+    out.push(copy);
+  }
+}
+
+// 反复记号：‖: ... :‖ 之间再走一遍。
+// 谱子上常见"只有 ‖: 没有 :‖"，那表示从这个记号一直反复到曲子结尾。
+function expandRepeats(notes) {
+  const out = [];
+  let segStart = -1;
+  notes.forEach((n, i) => {
+    out.push(n);
+    if (n.rstart) segStart = i;
+    if (n.rend && segStart >= 0) {
+      copySegment(notes, out, segStart, i);
+      segStart = -1;
+    }
+  });
+  // 收尾时还没闭合，说明是"反复到曲末"
+  if (segStart >= 0 && segStart < notes.length) {
+    copySegment(notes, out, segStart, notes.length - 1);
+  }
+  return out;
+}
+
+// 找出第 i 个音所在小节的第一个音的下标。
+// 转调标记在小节线上，所以点小节里任何位置都应该从该小节开头生效。
+function measureStartIndex(notes, i, meter) {
+  const barTicks = (meter > 0 ? meter : 4) * TICKS_PER_BEAT;
+  let acc = 0;
+  let start = 0;
+  for (let k = 0; k <= i; k++) {
+    if (k === i) return start;
+    acc += ticksOf(notes[k]);
+    if (acc >= barTicks) {
+      acc -= barTicks;
+      start = k + 1;
+    }
+  }
+  return start;
+}
+
+// 最终要演奏（也是要导出）的音符序列。
+// 顺序很重要：先把每个音的移调量按原始顺序算成绝对值，再展开反复。
+// 反过来的话，反复抄出来的那一遍会把自己段内的转调标记再累加一次。
+function playableNotes() {
+  let shift = 0;
+  const withShift = state.notes.map(n => {
+    if (n.mod) shift += n.mod;
+    return Object.assign({}, n, { absShift: shift });
+  });
+  return expandRepeats(withShift).map(n => {
+    if (!n.absShift || n.rest) return n;
+    const moved = Object.assign({}, n, midiToPitch(pitchToMidi(n) + n.absShift));
+    // 倚音的音高要跟着一起移调；时值不参与移调，要原样带过去
+    if (n.grace) {
+      moved.grace = Object.assign(
+        midiToPitch(pitchToMidi(n.grace) + n.absShift),
+        { dur: n.grace.dur }
+      );
+    }
+    return moved;
+  });
+}
+
+// ---------------------------------------------------------------- 本地存储
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      notes: state.notes.map(compactNote),
+      title: $('title').value,
+      bpm: $('bpm').value,
+      meter: $('meter').value,
+    }));
+  } catch (e) { /* 隐私模式写不进去，忽略 */ }
+}
+
+function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { return false; }
+  if (!raw) return false;
+  try {
+    const data = JSON.parse(raw);
+    // 和打开文件走同一套补全 —— 存的时候 compactNote 省略了默认值，
+    // 这里必须靠 normalizeNote 补回来，否则 dur 之类是 undefined，
+    // ticksOf 会算出 NaN，小节换行就整个失效（音符全挤在一行）。
+    if (Array.isArray(data.notes)) state.notes = data.notes.map(normalizeNote);
+    if (data.title) $('title').value = data.title;
+    if (data.bpm) $('bpm').value = data.bpm;
+    if (data.meter !== undefined) $('meter').value = data.meter;
+    return state.notes.length > 0;
+  } catch (e) { return false; }
+}
+
+// ---------------------------------------------------------------- 渲染
+
+// 减时线条数：四分 0 条、八分 1 条、十六分 2 条、三十二分 3 条
+function linesCountOf(n) {
+  return n.dur === 4 ? 0 : n.dur === 8 ? 1 : n.dur === 16 ? 2 : 3;
+}
+
+function render() {
+  scoreEl.innerHTML = '';
+  // 必须按音符下标对齐：延音横杠等元素不能塞进来，否则连音线的弧线会画错位置
+  noteEls = new Array(state.notes.length).fill(null);
+
+  const meter = +$('meter').value;
+  // 不画小节线时也按 4 拍一组换行，免得整首挤成一行
+  const barTicks = (meter > 0 ? meter : 4) * TICKS_PER_BEAT;
+  let acc = 0;
+  let barNo = 0;
+  let measure = null;
+
+  function openMeasure() {
+    measure = document.createElement('div');
+    measure.className = 'measure' + (meter > 0 ? '' : ' plain');
+    if (meter > 0) {
+      const num = document.createElement('span');
+      num.className = 'barnum';
+      num.textContent = ++barNo;
+      measure.appendChild(num);
+    }
+    scoreEl.appendChild(measure);
+    acc = 0;
+  }
+  openMeasure();
+
+  state.notes.forEach((n, i) => {
+    const el = document.createElement('div');
+    el.className = 'note' + (i === state.selected ? ' sel' : '')
+                 + (i === state.tieFrom ? ' tieA' : '')
+                 + (n.rest ? ' rest' : '');
+
+    // 高八度一个点，超高音两个点竖排
+    const top = document.createElement('div');
+    top.className = 'top';
+    const dotCount = n.octave >= 2 ? 2 : n.octave === 1 ? 1 : 0;
+    for (let k = 0; k < dotCount; k++) {
+      const d = document.createElement('span');
+      d.textContent = '•';
+      top.appendChild(d);
+    }
+
+    const num = document.createElement('div');
+    num.className = 'num';
+    if (n.rest) {
+      num.textContent = '0';
+    } else {
+      num.innerHTML = (n.sharp ? '<span class="sharp">#</span>' : '') +
+                      (n.octave >= 2 ? 1 : n.degree) +
+                      (n.dot ? '<span class="dot">•</span>' : '');
+      // 倚音画在主音数字左上角：八度点 / 数字 / 减时线 / 低八度点 / 指向主音的折线
+      if (n.grace) {
+        const gr = n.grace;
+        const g = document.createElement('span');
+        g.className = 'grace';
+
+        // 八度点：高音一个、超高音两个（竖排）
+        const dots = gr.octave >= 2 ? 2 : gr.octave === 1 ? 1 : 0;
+        if (dots) {
+          const top = document.createElement('span');
+          top.className = 'gtop';
+          for (let k = 0; k < dots; k++) {
+            const d = document.createElement('span');
+            d.textContent = '•';
+            top.appendChild(d);
+          }
+          g.appendChild(top);
+        }
+
+        const gn = document.createElement('span');
+        gn.className = 'gnum';
+        gn.textContent = (gr.sharp ? '#' : '') + (gr.octave >= 2 ? 1 : gr.degree);
+        g.appendChild(gn);
+
+        const gl = document.createElement('span');
+        gl.className = 'glines';
+        for (let k = 0; k < graceLineCount(gr.dur); k++) {
+          gl.appendChild(document.createElement('i'));
+        }
+        g.appendChild(gl);
+
+        // 低八度点在最下面（和主音一样，减时线之下）
+        if (gr.octave <= -1) {
+          const bot = document.createElement('span');
+          bot.className = 'gbot';
+          bot.textContent = '•';
+          g.appendChild(bot);
+        }
+
+        const ptr = document.createElement('span');
+        ptr.className = 'gptr';
+        g.appendChild(ptr);
+
+        num.appendChild(g);
+      }
+    }
+
+    // 减时线：同一拍内、左边相邻音符也有这一层时，线向左延伸接上（简谱的连写画法）
+    const lines = document.createElement('div');
+    lines.className = 'lines';
+    const count = linesCountOf(n);
+    const prevCount = i > 0 ? linesCountOf(state.notes[i - 1]) : 0;
+    // acc 是当前音符在小节内的起始位置；不是整拍就说明它和上一个音在同一拍里
+    const sameBeat = i > 0 && acc % TICKS_PER_BEAT !== 0;
+    for (let k = 0; k < count; k++) {
+      const ln = document.createElement('i');
+      if (sameBeat && prevCount > k) ln.className = 'link';
+      lines.appendChild(ln);
+    }
+
+    const bot = document.createElement('div');
+    bot.className = 'bot';
+    bot.textContent = n.octave <= -1 ? '•' : '';
+
+    // 自上而下：高八度点 / 数字 / 减时线 / 低八度点
+    el.append(top, num, lines, bot);
+
+    // 转调标记挂在音符上方
+    if (n.mod) {
+      const md = document.createElement('div');
+      md.className = 'modmark';
+      md.textContent = (n.mod > 0 ? '+' : '') + n.mod;
+      el.insertBefore(md, el.firstChild);
+    }
+
+    el.onclick = () => onNoteClick(i);
+    if (n.rstart) {
+      const mk = document.createElement('span');
+      mk.className = 'mark';
+      mk.textContent = '‖:';
+      measure.appendChild(mk);
+    }
+    measure.appendChild(el);
+    noteEls[i] = el;
+    if (n.rend) {
+      const mk = document.createElement('span');
+      mk.className = 'mark';
+      mk.textContent = ':‖';
+      measure.appendChild(mk);
+    }
+
+    const holds = Math.round((n.hold || 0) / TICKS_PER_BEAT);
+    for (let k = 0; k < holds; k++) {
+      const h = document.createElement('div');
+      h.className = 'hold';
+      h.textContent = '-';
+      measure.appendChild(h);
+    }
+
+    acc += ticksOf(n);
+    if (acc >= barTicks) {
+      acc -= barTicks;
+      openMeasure();
+    }
+  });
+
+  // 只有 ‖: 没有 :‖ 时，在末尾补一个淡色的收尾记号，让人看得出是反复到结尾
+  const lastStart = state.notes.reduce((acc, n, i) => (n.rstart ? i : acc), -1);
+  const hasEnd = state.notes.some(n => n.rend);
+  if (lastStart >= 0 && !hasEnd) {
+    const mk = document.createElement('span');
+    mk.className = 'mark auto';
+    mk.textContent = ':‖';
+    mk.title = '只有反复开始，没有反复结束：这段会反复到曲子结尾';
+    scoreEl.lastChild.appendChild(mk);
+  }
+
+  $('count').textContent = state.notes.length ? `共 ${state.notes.length} 个音符` : '';
+  drawTies();
+  save();
+}
+
+// 连音线画在数字上方，跨过两个音，和琴谱上的画法一致
+function drawTies() {
+  tiesEl.innerHTML = '';
+  const base = scoreEl.getBoundingClientRect();
+  if (!base.width) return;
+  tiesEl.setAttribute('viewBox', `0 0 ${base.width} ${base.height}`);
+  tiesEl.style.width = base.width + 'px';
+  tiesEl.style.height = base.height + 'px';
+
+  state.notes.forEach((n, i) => {
+    tiesOf(n).forEach(t => {
+    const a = noteEls[i], b = noteEls[t];
+    if (!a || !b) return;
+    const ra = a.getBoundingClientRect();
+    const rb = b.getBoundingClientRect();
+    // 自动换行导致两个音不在同一行：在第一个音右上角画个短弧，表示连到下一行
+    if (Math.abs(ra.top - rb.top) > 4) {
+      const hx = ra.left - base.left + ra.width * 0.62;
+      const hy = ra.top - base.top + 3;
+      const tail = document.createElementNS(SVG_NS, 'path');
+      tail.setAttribute('d', `M ${hx} ${hy} Q ${hx + 5} ${hy - 8} ${hx + 10} ${hy - 1}`);
+      tail.setAttribute('fill', 'none');
+      tail.setAttribute('stroke', '#1a1d21');
+      tail.setAttribute('stroke-width', '1.4');
+      tail.setAttribute('stroke-linecap', 'round');
+      tiesEl.appendChild(tail);
+      return;
+    }
+
+    const x1 = ra.left - base.left + ra.width * 0.62;
+    const x2 = rb.left - base.left + rb.width * 0.38;
+    const y = ra.top - base.top + 3;
+    const lift = Math.max(7, Math.min(26, (x2 - x1) * 0.22));
+
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', `M ${x1} ${y} Q ${(x1 + x2) / 2} ${y - lift} ${x2} ${y}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#1a1d21');
+    path.setAttribute('stroke-width', '1.4');
+    path.setAttribute('stroke-linecap', 'round');
+    tiesEl.appendChild(path);
+    });
+  });
+}
+
+// ---------------------------------------------------------------- 交互
+function setStatus(text, warn) {
+  $('status').textContent = text;
+  $('status').className = warn ? 'status warn' : 'status';
+}
+
+function onNoteClick(i) {
+  // 连线状态：这一下是在选终点
+  if (state.tieFrom >= 0) {
+    const a = state.tieFrom;
+    state.tieFrom = -1;
+    syncTieButton();
+    if (a === i) { setStatus('起点和终点是同一个音，已取消', true); render(); return; }
+    const from = Math.min(a, i), to = Math.max(a, i);
+    const src = state.notes[from];
+    src.ties = tiesOf(src);
+    if (src.ties.includes(to)) {
+      setStatus(`第 ${from + 1} 个音本来就连着第 ${to + 1} 个，没重复加`, true);
+      render(); return;
+    }
+    src.ties.push(to);
+    state.selected = from;
+    syncFromNote(src);
+    render();
+    const merges = linkMerges(state.notes, from, to);
+    setStatus(merges
+      ? `第 ${from + 1} 连到第 ${to + 1}：音高相同且相邻，导出时会合并成一个长音`
+      : `第 ${from + 1} 连到第 ${to + 1}：圆滑线，只画在谱面上，不改变演奏`);
+    return;
+  }
+
+  state.selected = i;
+  syncFromNote(state.notes[i]);
+  render();
+  updateStatus();
+}
+
+// 点音符后，工具栏跟着变成它的时值和八度。
+// 注意这里不碰「是否休止」：休止符只由 0 键输入，不跟着选中状态走，
+// 否则点过一个休止符之后再按 1..7 会全部变成休止。
+function syncFromNote(n) {
+  state.cur.dur = n.dur;
+  state.cur.dot = n.dot;
+  state.cur.sharp = n.sharp;
+  state.cur.octave = n.octave;
+  syncToolbar();
+}
+
+function updateStatus() {
+  const i = state.selected;
+  if (i < 0 || i >= state.notes.length) { setStatus('没有选中音符', false); return; }
+  const n = state.notes[i];
+  const where = n.octave <= -1 ? '低音' : n.octave === 0 ? '中音' : n.octave === 1 ? '高音' : '超高音';
+  let text = n.rest
+    ? `选中第 ${i + 1} 个：休止 ${beatsOf(n).toFixed(2)} 拍`
+    : `选中第 ${i + 1} 个：${where} ${n.degree}${n.sharp ? '#' : ''}，${beatsOf(n).toFixed(2)} 拍`;
+  let warn = false;
+  const marks = [];
+  if (n.rstart) marks.push('反复开始');
+  if (n.rend) marks.push('反复结束');
+  if (n.mod) marks.push(`移调 ${n.mod > 0 ? '+' : ''}${n.mod} 半音`);
+  if (n.grace) marks.push(`倚音 ${graceLabel(n.grace)}`);
+  if (marks.length) text += '，' + marks.join('、');
+
+  const links = tiesOf(n);
+  if (links.length) {
+    const parts = links.map(t => {
+      const target = state.notes[t];
+      if (!target) return `第 ${t + 1} 个（已不存在）`;
+      if (linkMerges(state.notes, i, t)) {
+        return `第 ${t + 1} 个（延音线，合并后 ${((ticksOf(n) + ticksOf(target)) / TICKS_PER_BEAT).toFixed(2)} 拍）`;
+      }
+      return `第 ${t + 1} 个（圆滑线）`;
+    });
+    text += '，连着 ' + parts.join('、');
+  }
+  setStatus(text, warn);
+}
+
+function durFields() {
+  return { dur: state.cur.dur, dot: state.cur.dot, hold: 0 };
+}
+
+// rest 是显式参数，不是工具栏上的「粘性」状态：
+// 休止符只由 0 键输入，不会粘在后面的音符输入上。
+function addNote(degree, rest) {
+  rest = !!rest;
+  if (state.cur.octave >= 2 && degree !== 1 && !rest) {
+    setStatus('超高音区只有 do（1），其他度数够不着', true);
+    return;
+  }
+  state.notes.push(Object.assign({
+    rest,
+    degree,
+    octave: state.cur.octave,
+    sharp: rest ? false : state.cur.sharp,
+    ties: [], rstart: false, rend: false, mod: 0, grace: null,
+  }, durFields()));
+  state.selected = state.notes.length - 1;
+  render(); updateStatus();
+}
+
+function syncToolbar() {
+  document.querySelectorAll('[data-dur]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.dur === state.cur.dur));
+  document.querySelectorAll('[data-oct]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.oct === state.cur.octave));
+  $('btnDot').classList.toggle('on', state.cur.dot);
+  $('btnSharp').classList.toggle('on', state.cur.sharp);
+}
+
+function syncTieButton() {
+  const active = state.tieFrom >= 0;
+  $('btnTie').classList.toggle('on', active);
+  $('btnTie').textContent = active ? '再点第二个音' : '连音线';
+}
+
+function applyToSelected(fn) {
+  const i = state.selected;
+  if (i < 0 || i >= state.notes.length) return;
+  fn(state.notes[i]);
+  render(); updateStatus();
+}
+
+// ---- 工具栏 ----
+document.querySelectorAll('[data-dur]').forEach(b => b.onclick = () => {
+  state.cur.dur = +b.dataset.dur; syncToolbar();
+  applyToSelected(n => n.dur = state.cur.dur);
+});
+document.querySelectorAll('[data-oct]').forEach(b => b.onclick = () => {
+  state.cur.octave = +b.dataset.oct; syncToolbar();
+  applyToSelected(n => n.octave = state.cur.octave);
+});
+$('btnDot').onclick = () => {
+  state.cur.dot = !state.cur.dot; syncToolbar();
+  applyToSelected(n => n.dot = state.cur.dot);
+};
+$('btnHold').onclick = () => applyToSelected(n => n.hold = (n.hold || 0) + TICKS_PER_BEAT);
+$('btnSharp').onclick = () => {
+  state.cur.sharp = !state.cur.sharp; syncToolbar();
+  applyToSelected(n => { if (!n.rest) n.sharp = state.cur.sharp; });
+};
+$('btnRStart').onclick = () => applyToSelected(n => {
+  n.rstart = !n.rstart;
+  setStatus(n.rstart ? '这里开始反复（导出时会把这个段落再吹一遍）' : '已取消反复开始');
+});
+$('btnREnd').onclick = () => applyToSelected(n => {
+  n.rend = !n.rend;
+  setStatus(n.rend ? '这里是反复段的结尾' : '已取消反复结束');
+});
+$('btnMod').onclick = () => {
+  const picked = state.selected;
+  if (picked < 0) { setStatus('先点一下要转调的那个小节里的任意音符', true); return; }
+
+  // 转调标记画在小节线上，所以自动对齐到该小节的第一个音
+  const i = measureStartIndex(state.notes, picked, +$('meter').value);
+  const cur = state.notes[i].mod || 0;
+  const raw = prompt(
+    '从第 ' + (i + 1) + ' 个音（这一小节的第一个音）起转调。\n\n' +
+    '最省事的填法：把谱面上括号里的那串直接抄进来，比如\n' +
+    '    前3=后5\n' +
+    '    前5=后4\n' +
+    '程序自己算出要升降多少，不需要你判断原调是什么。\n\n' +
+    '也可以直接填半音数（正数升高、负数降低）。填 0 取消。',
+    cur ? String(cur) : '');
+  if (raw === null) return;
+
+  const input = raw.trim();
+  let num = NaN;
+  let how = '';
+  // 「前3=后5」里的"前/后"两个字先去掉，剩下的 3=5 就是关系
+  const rel = input.replace(/[前后]/g, '').match(/([1-7])\s*=\s*([1-7])/);
+  if (rel) {
+    // 「前a=后b」：前调的 a 音等于后调的 b 音，两者到各自 do 的距离之差就是移调量
+    const a = DEGREE_TO_PC[+rel[1]];
+    const b = DEGREE_TO_PC[+rel[2]];
+    num = a - b;
+    how = `按「${rel[1]}=${rel[2]}」算出`;
+  } else if (/^-?\d+$/.test(input)) {
+    num = parseInt(input, 10);
+    how = '直接指定';
+  } else {
+    setStatus('填「前3=后5」这样的关系，或者一个整数半音数', true);
+    return;
+  }
+
+  state.notes[i].mod = num;
+  state.selected = i;
+  syncFromNote(state.notes[i]);
+  render();
+
+  if (!num) { setStatus('已取消这里的转调'); return; }
+  const alt = num > 0 ? num - 12 : num + 12;
+  setStatus(
+    `${how}：第 ${i + 1} 个音（第 ${picked + 1} 个所在小节的第一个音）起整体移调 `
+    + `${num > 0 ? '+' : ''}${num} 个半音。`
+    + (Math.abs(num) > 6
+        ? ` 如果听着太高/太低，可以改填 ${alt}（相差一个八度）`
+        : ''));
+};
+// ---- 倚音弹窗 ----
+// 打开时把当前值（没有的话就拿主音的值）抄进 draft，所有按钮只改 draft，
+// 点「确定」才写回音符 —— 所以「取消」一定是干净的，不会改到谱子。
+let graceDraft = null;
+
+function openGraceDialog(i) {
+  const n = state.notes[i];
+  const g = n.grace;
+  graceDraft = g
+    ? { index: i, degree: g.degree, octave: g.octave, sharp: g.sharp, dur: g.dur }
+    : { index: i, degree: n.degree, octave: n.octave, sharp: false, dur: GRACE_DEFAULTS.dur };
+  $('graceSub').textContent =
+    `加在「第 ${i + 1} 个音」前面，主音是 ${pitchLabel(n)}，${beatsOf(n).toFixed(2)} 拍。`;
+  $('gDel').style.display = g ? '' : 'none';
+  syncGraceDialog();
+  $('graceDlg').showModal();
+}
+
+function syncGraceDialog() {
+  const d = graceDraft;
+  if (!d) return;
+  const isTop = d.octave >= 2;          // 超高音区只有 do
+  document.querySelectorAll('.gDeg').forEach(b => {
+    const deg = +b.dataset.deg;
+    b.classList.toggle('on', deg === (isTop ? 1 : d.degree));
+    b.disabled = isTop && deg !== 1;
+  });
+  document.querySelectorAll('.gOct').forEach(b =>
+    b.classList.toggle('on', +b.dataset.oct === d.octave));
+  document.querySelectorAll('.gDur').forEach(b =>
+    b.classList.toggle('on', +b.dataset.dur === d.dur));
+  $('gSharp').classList.toggle('on', d.sharp);
+  $('gSharp').disabled = isTop;
+
+  // 预览要说清「实际占多少」：主音太短时借不到那么多，会被压下来
+  const n = state.notes[d.index];
+  const want = ticksForDur(d.dur);
+  const actual = Math.min(want, Math.floor(ticksOf(n) / 2));
+  const msPerTick = 60000 / (+$('bpm').value || 120) / TICKS_PER_BEAT;
+  let text = `倚音 ${graceLabel(d)}，实际占 ${actual} tick（约 ${(actual * msPerTick).toFixed(0)} ms）`;
+  if (actual < want) {
+    text += `。主音只有 ${ticksOf(n)} tick，倚音最多借一半，所以被压短了`;
+  }
+  $('gracePreview').textContent = text;
+}
+
+$('btnGrace').onclick = () => {
+  const i = state.selected;
+  if (i < 0) { setStatus('先点一下要加倚音的音符', true); return; }
+  if (state.notes[i].rest) { setStatus('休止符没有倚音', true); return; }
+  openGraceDialog(i);
+};
+
+document.querySelectorAll('.gDeg').forEach(b => b.onclick = () => {
+  graceDraft.degree = +b.dataset.deg;
+  syncGraceDialog();
+});
+document.querySelectorAll('.gOct').forEach(b => b.onclick = () => {
+  graceDraft.octave = +b.dataset.oct;
+  if (graceDraft.octave >= 2) { graceDraft.degree = 1; graceDraft.sharp = false; }
+  syncGraceDialog();
+});
+document.querySelectorAll('.gDur').forEach(b => b.onclick = () => {
+  graceDraft.dur = +b.dataset.dur;
+  syncGraceDialog();
+});
+$('gSharp').onclick = () => {
+  graceDraft.sharp = !graceDraft.sharp;
+  syncGraceDialog();
+};
+$('gCancel').onclick = () => $('graceDlg').close();
+$('gDel').onclick = () => {
+  const d = graceDraft;
+  state.notes[d.index].grace = null;
+  $('graceDlg').close();
+  render(); updateStatus();
+  setStatus(`第 ${d.index + 1} 个音的倚音已删除`);
+};
+$('gOk').onclick = () => {
+  const d = graceDraft;
+  state.notes[d.index].grace = {
+    degree: d.degree, octave: d.octave, sharp: d.sharp, dur: d.dur,
+  };
+  $('graceDlg').close();
+  render(); updateStatus();
+  setStatus(`第 ${d.index + 1} 个音前面加了倚音 ${graceLabel(d)}`);
+};
+
+$('btnDel').onclick = deleteSelected;
+$('btnLeft').onclick = () => moveSelected(-1);
+$('btnRight').onclick = () => moveSelected(1);
+$('meter').onchange = () => render();
+
+$('btnTie').onclick = () => {
+  if (state.tieFrom >= 0) {          // 再点一次取消
+    state.tieFrom = -1;
+    syncTieButton();
+    setStatus('已取消连线', false);
+    render();
+    return;
+  }
+  if (state.selected < 0) { setStatus('先点一个音符作为起点，再点连音线', true); return; }
+  if (state.selected >= state.notes.length - 1) { setStatus('最后一个音后面没有音可以连', true); return; }
+  state.tieFrom = state.selected;
+  syncTieButton();
+  setStatus(`已选第 ${state.selected + 1} 个音作起点，现在点第二个音`);
+  render();
+};
+
+function deleteSelected() {
+  const i = state.selected;
+  if (i < 0) return;
+  // 删掉一个音后，所有指向它的连线作废，指向它后面的连线下标要往前挪一格
+  state.notes.forEach(n => {
+    n.ties = tiesOf(n).filter(t => t !== i).map(t => (t > i ? t - 1 : t));
+  });
+  state.notes.splice(i, 1);
+  state.selected = Math.min(i, state.notes.length - 1);
+  state.tieFrom = -1; syncTieButton();
+  render(); updateStatus();
+}
+
+function moveSelected(dir) {
+  const i = state.selected;
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= state.notes.length) return;
+  // 交换位置后，挂在这两个位置上的连线关系不再成立（方向会反过来），直接清掉
+  state.notes.forEach(n => {
+    n.ties = tiesOf(n).filter(t => t !== i && t !== j);
+  });
+  [state.notes[i], state.notes[j]] = [state.notes[j], state.notes[i]];
+  state.selected = j;
+  state.tieFrom = -1; syncTieButton();
+  render(); updateStatus();
+}
+
+// ---- 键盘 ----
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  const k = e.key;
+  if (k >= '1' && k <= '7') { addNote(+k, false); e.preventDefault(); return; }
+  if (k === '0') { addNote(1, true); e.preventDefault(); return; }
+  if (k === '#') { state.cur.sharp = !state.cur.sharp; syncToolbar(); applyToSelected(n => { if (!n.rest) n.sharp = state.cur.sharp; }); e.preventDefault(); return; }
+  if (k === '-') { applyToSelected(n => n.hold = (n.hold || 0) + TICKS_PER_BEAT); e.preventDefault(); return; }
+  if (k === 'ArrowUp') { state.cur.octave = Math.min(2, state.cur.octave + 1); syncToolbar(); e.preventDefault(); return; }
+  if (k === 'ArrowDown') { state.cur.octave = Math.max(-1, state.cur.octave - 1); syncToolbar(); e.preventDefault(); return; }
+  if (k === 'ArrowLeft' || k === 'ArrowRight') {
+    const durs = [4, 8, 16, 32];
+    let i = durs.indexOf(state.cur.dur);
+    i = (i + (k === 'ArrowRight' ? 1 : durs.length - 1)) % durs.length;
+    state.cur.dur = durs[i]; syncToolbar();
+    e.preventDefault(); return;
+  }
+  if (k === 'Backspace' || k === 'Delete') { deleteSelected(); e.preventDefault(); return; }
+  if (k === 't' || k === 'T') { $('btnTie').click(); e.preventDefault(); return; }
+  if (k === 'Escape') {
+    state.selected = -1; state.tieFrom = -1; syncTieButton();
+    render(); updateStatus();
+  }
+});
+
+// ---- 导出 ----
+function buildDhs() {
+  const bpm = +$('bpm').value || 120;
+  const title = $('title').value || '我的曲子';
+  const lines = ['# 由简谱编辑器生成', `title=${title}`, `bpm=${bpm}`,
+                 `ticks_per_beat=${TICKS_PER_BEAT}`, '', '[score]'];
+
+  // 倚音在主音前面插一个短音，并从主音借走同样多的时间，所以总时长不变。
+  // 程序那边不需要任何改动 —— 它看到的就是两个普通音符。
+  const tokens = mergeTies(playableNotes()).flatMap(n => {
+    if (n.rest) return [`R/${n.totalTicks}`];
+    const degree = n.octave >= 2 ? 1 : n.degree;
+    const main = `${regOf(n.octave)}${degree}${n.sharp ? '#' : ''}`;
+    if (!n.grace) return [`${main}/${n.totalTicks}`];
+    const g = graceTicksOf(n);
+    const gDegree = n.grace.octave >= 2 ? 1 : n.grace.degree;
+    const grace = `${regOf(n.grace.octave)}${gDegree}${n.grace.sharp ? '#' : ''}/${g}`;
+    return [grace, `${main}/${n.totalTicks - g}`];
+  });
+
+  const perLine = 12;
+  for (let i = 0; i < tokens.length; i += perLine) {
+    lines.push(tokens.slice(i, i + perLine).join(' '));
+  }
+  return lines.join('\n') + '\n';
+}
+
+$('btnExport').onclick = () => {
+  if (!state.notes.length) { $('out').value = '还没有音符。'; return; }
+  $('out').value = buildDhs();
+};
+$('btnCopy').onclick = async () => {
+  if (!$('out').value) $('out').value = buildDhs();
+  try { await navigator.clipboard.writeText($('out').value); $('count').textContent = '已复制'; }
+  catch { $('out').select(); document.execCommand('copy'); $('count').textContent = '已复制'; }
+};
+$('btnDownload').onclick = () => {
+  const text = buildDhs();
+  $('out').value = text;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  a.download = ($('title').value || 'song') + '.dhs';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('btnClear').onclick = () => {
+  if (!state.notes.length || confirm('清空全部音符？')) {
+    state.notes = []; state.selected = -1; state.tieFrom = -1;
+    syncTieButton(); render(); updateStatus();
+  }
+};
+
+// ---- 试听 ----
+let audio = null;
+let playing = [];
+
+$('btnPlay').onclick = () => {
+  stopPlay();
+  if (!state.notes.length) return;
+  const bpm = +$('bpm').value || 120;
+  const msPerTick = 60000 / bpm / TICKS_PER_BEAT;
+  audio = new (window.AudioContext || window.webkitAudioContext)();
+  let t = audio.currentTime + 0.08;
+
+  const playTone = (p, dur, at) => {
+    const degree = p.octave >= 2 ? 1 : p.degree;
+    const midi = 60 + p.octave * 12 + SEMITONE[degree] + (p.sharp ? 1 : 0);
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(0.28, at + 0.012);
+    gain.gain.setValueAtTime(0.28, at + Math.max(0.02, dur - 0.05));
+    gain.gain.linearRampToValueAtTime(0, at + dur * 0.96);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(at);
+    osc.stop(at + dur);
+    playing.push(osc);
+  };
+
+  mergeTies(playableNotes()).forEach(n => {
+    let dur = n.totalTicks * msPerTick / 1000;
+    // 倚音先响，占的就是从主音借来的那一小段时间
+    if (!n.rest && n.grace) {
+      const gDur = graceTicksOf(n) * msPerTick / 1000;
+      playTone(n.grace, gDur, t);
+      t += gDur;
+      dur -= gDur;
+    }
+    if (!n.rest) playTone(n, dur, t);
+    t += dur;
+  });
+};
+
+function stopPlay() {
+  playing.forEach(o => { try { o.stop(); } catch (err) {} });
+  playing = [];
+  if (audio) { try { audio.close(); } catch (err) {} audio = null; }
+}
+$('btnStop').onclick = stopPlay;
+
+// ---------------------------------------------------------------- 文件读写
+
+function setFileStatus(text, warn) {
+  $('fileStatus').textContent = text;
+  $('fileStatus').className = warn ? 'status warn' : 'status';
+}
+
+// 每个字段的默认值。保存时只写和默认值不同的字段，文件能小一大截；
+// 读回来由 normalizeNote 按同一张表补全。
+// **加新字段时只改这里一行 + normalizeNote 会自动跟上**，不用动别的地方。
+const NOTE_DEFAULTS = {
+  degree: 1,
+  octave: 0,
+  dur: 4,
+  dot: false,
+  hold: 0,
+  rest: false,
+  sharp: false,
+  ties: [],
+  rstart: false,
+  rend: false,
+  mod: 0,
+  grace: null,
+};
+
+// 倚音自己的字段和默认值。时值默认十六分（简谱里最常见的倚音写法）。
+const GRACE_DEFAULTS = {
+  degree: 1,
+  octave: 0,
+  sharp: false,
+  dur: 16,
+};
+
+// 去掉等于默认值的字段。degree 例外：它是音符的身份而不是修饰，
+// 非休止符一律写出来，免得 JSON 里出现 `{}` 这种看不出音高的东西。
+function compactNote(n) {
+  const out = {};
+  if (!n.rest) out.degree = n.degree;
+  for (const k of Object.keys(NOTE_DEFAULTS)) {
+    if (k === 'degree') continue;
+    const v = n[k];
+    const d = NOTE_DEFAULTS[k];
+    if (Array.isArray(d)) {
+      if (Array.isArray(v) && v.length) out[k] = v;
+      continue;
+    }
+    if (k === 'grace') {
+      if (v) out[k] = compactGrace(v);
+      continue;
+    }
+    if (v !== d) out[k] = v;
+  }
+  return out;
+}
+
+// 倚音也只写非默认字段；degree 一律写出来，理由和音符一样
+function compactGrace(g) {
+  const out = { degree: g.degree };
+  for (const k of Object.keys(GRACE_DEFAULTS)) {
+    if (k === 'degree') continue;
+    if (g[k] !== GRACE_DEFAULTS[k]) out[k] = g[k];
+  }
+  return out;
+}
+
+// 按 NOTE_DEFAULTS 补齐省略的字段，得到内存里用的完整音符。
+// 这不是「兼容旧格式」的代码 —— 紧凑格式本来就不写默认值，读回来必须补全，
+// 少了它渲染和导出都会拿到 undefined。
+function normalizeNote(n) {
+  const out = Object.assign({}, n);
+  for (const k of Object.keys(NOTE_DEFAULTS)) {
+    const d = NOTE_DEFAULTS[k];
+    const v = out[k];
+    if (Array.isArray(d)) {
+      if (!Array.isArray(v)) out[k] = [];
+    } else if (d === null) {
+      // grace：只要 degree 在就算有效，其余缺了按 GRACE_DEFAULTS 补。
+      // 不能要求 octave 等字段都在 —— 紧凑格式会把等于默认值的字段省掉
+      // （比如 octave: 0 不写），要求太严会把好好的倚音整条丢掉。
+      if (!v || typeof v.degree !== 'number') {
+        out[k] = null;
+      } else {
+        out[k] = {
+          degree: v.degree,
+          octave: typeof v.octave === 'number' ? v.octave : GRACE_DEFAULTS.octave,
+          sharp: !!v.sharp,
+          dur: typeof v.dur === 'number' && v.dur > 0 ? v.dur : GRACE_DEFAULTS.dur,
+        };
+      }
+    } else if (typeof d === 'boolean') {
+      out[k] = !!v;
+    } else if (typeof d === 'number') {
+      if (typeof v !== 'number' || !isFinite(v)) out[k] = d;
+    }
+  }
+  return out;
+}
+
+// 把一份谱子装进编辑器
+function adoptScore(item, name) {
+  state.notes = (item.notes || []).map(normalizeNote);
+  state.selected = -1;
+  state.tieFrom = -1;
+  $('title').value = item.title || name || '我的曲子';
+  if (item.bpm) $('bpm').value = item.bpm;
+  if (item.meter !== undefined) $('meter').value = item.meter;
+  syncToolbar();
+  syncTieButton();
+  render();
+  updateStatus();
+}
+
+$('btnSaveFile').onclick = () => {
+  const data = {
+    format: 'harmonica-score-v1',
+    title: $('title').value || '我的曲子',
+    bpm: +$('bpm').value || 120,
+    meter: +$('meter').value,
+    notes: state.notes.map(compactNote),
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }));
+  a.download = data.title + '.score.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setFileStatus(`已保存 ${data.title}.score.json（${state.notes.length} 个音符）`);
+};
+
+$('btnOpen').onclick = () => $('fileInput').click();
+
+$('fileInput').onchange = async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  let text = '';
+  try {
+    text = await f.text();
+  } catch (err) {
+    setFileStatus('读不了这个文件：' + err.message, true);
+    return;
+  }
+  const lower = f.name.toLowerCase();
+  try {
+    if (lower.endsWith('.json')) {
+      const data = JSON.parse(text);
+      if (!Array.isArray(data.notes)) throw new Error('这个文件里没有音符');
+      adoptScore(data, data.title);
+      setFileStatus(`已打开 ${f.name}：${data.notes.length} 个音符（含连音线/反复/转调）`);
+    } else {
+      const data = parseDhs(text);
+      adoptScore({ notes: data.notes, title: data.title, bpm: data.bpm, meter: +$('meter').value }, null);
+      setFileStatus(`已打开 ${f.name}：${data.notes.length} 个音符。`
+        + '这是演奏谱，连音线/反复/转调在导出时已展开，恢复不了。');
+    }
+  } catch (err) {
+    setFileStatus('打开失败：' + err.message, true);
+  } finally {
+    e.target.value = '';   // 清掉，方便再选同一个文件
+  }
+};
+
+// ---------------------------------------------------------------- 导入 .dhs 文本
+
+// 总 tick 数 -> (基本时值, 是否附点, 增时线)
+function ticksToNote(ticks) {
+  const bases = [[4, 24], [8, 12], [16, 6], [32, 3]];
+  for (const [dur, base] of bases) {
+    if (ticks >= base * 1.5 && (ticks - base * 1.5) % TICKS_PER_BEAT === 0) {
+      return { dur, dot: true, hold: ticks - base * 1.5 };
+    }
+  }
+  for (const [dur, base] of bases) {
+    if (ticks >= base && (ticks - base) % TICKS_PER_BEAT === 0) {
+      return { dur, dot: false, hold: ticks - base };
+    }
+  }
+  return { dur: 4, dot: false, hold: Math.max(0, ticks - TICKS_PER_BEAT) };
+}
+
+function parseDhs(text) {
+  let bpm = 120, tpb = TICKS_PER_BEAT, title = '';
+  let inScore = false;
+  const notes = [];
+
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    if (line.toLowerCase() === '[score]') { inScore = true; continue; }
+    if (!inScore) {
+      const kv = line.match(/^([A-Za-z_]+)\s*=\s*(.+)$/);
+      if (kv) {
+        const k = kv[1].toLowerCase(), v = kv[2].trim();
+        if (k === 'bpm') bpm = parseFloat(v) || 120;
+        else if (k === 'ticks_per_beat') tpb = parseInt(v, 10) || TICKS_PER_BEAT;
+        else if (k === 'title') title = v;
+      }
+      continue;
+    }
+    for (const tok of line.split(/\s+/)) {
+      const m = tok.match(/^([A-Za-z])([1-7]?)(#?)\/(\d+)$/);
+      if (!m) throw new Error('看不懂这个音：' + tok);
+      const reg = m[1].toUpperCase();
+      const ticks = Math.round(parseInt(m[4], 10) * TICKS_PER_BEAT / tpb);
+      const timing = ticksToNote(ticks);
+      if (reg === 'R') {
+        notes.push(Object.assign({
+          rest: true, degree: 1, octave: 0, sharp: false,
+          ties: [], rstart: false, rend: false, mod: 0,
+        }, timing));
+        continue;
+      }
+      if (!'LMHT'.includes(reg)) throw new Error('不认识的音区：' + reg);
+      const octave = reg === 'L' ? -1 : reg === 'M' ? 0 : reg === 'H' ? 1 : 2;
+      const degree = reg === 'T' ? 1 : parseInt(m[2], 10);
+      notes.push(Object.assign({
+        rest: false, degree, octave, sharp: m[3] === '#',
+        ties: [], rstart: false, rend: false, mod: 0,
+      }, timing));
+    }
+  }
+  if (!notes.length) throw new Error('没读到任何音符');
+  return { notes, bpm, title };
+}
+
+// 标题/BPM 改动也存下来
+$('title').oninput = save;
+$('bpm').oninput = save;
+
+// ---- 初始化 ----
+const restored = load();
+syncToolbar();
+syncTieButton();
+render();
+updateStatus();
+if (restored) setStatus(`已恢复上次编辑的 ${state.notes.length} 个音符`, false);
+window.addEventListener('resize', drawTies);
+</script>
+</body>
+</html>

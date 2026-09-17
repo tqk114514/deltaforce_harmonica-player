@@ -1,0 +1,468 @@
+{
+  "format": "harmonica-score-v1",
+  "title": "琵琶曲",
+  "bpm": 120,
+  "meter": 4,
+  "notes": [
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 3
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "hold": 24
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "octave": -1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 2
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8,
+      "ties": [
+        24
+      ]
+    },
+    {
+      "degree": 3,
+      "dot": true
+    },
+    {
+      "degree": 6,
+      "octave": -1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 7
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 3
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "dot": true
+    },
+    {
+      "degree": 6,
+      "octave": -1,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "octave": -1,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 7,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dot": true
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dot": true
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dot": true
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8,
+      "ties": [
+        68
+      ]
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 16
+    },
+    {
+      "degree": 6,
+      "dur": 16,
+      "ties": [
+        68
+      ]
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dot": true
+    },
+    {
+      "degree": 6,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8,
+      "ties": [
+        81
+      ]
+    },
+    {
+      "degree": 2,
+      "octave": 1
+    },
+    {
+      "degree": 6,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dur": 8,
+      "ties": [
+        88
+      ]
+    },
+    {
+      "degree": 6,
+      "octave": 1,
+      "dur": 16
+    },
+    {
+      "degree": 5,
+      "octave": 1,
+      "dur": 16
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dot": true
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 3,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 5,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1,
+      "dur": 8
+    },
+    {
+      "degree": 6,
+      "dur": 8
+    },
+    {
+      "degree": 2,
+      "octave": 1
+    },
+    {
+      "degree": 1,
+      "octave": 1,
+      "hold": 48
+    }
+  ]
+}

@@ -1,2 +1,4 @@
-target/
-.workbuddy-ai/
+build/
+.qt/
+*.user
+CMakeUserPreserve.txt

@@ -10,8 +10,8 @@
 用法：
     python tools/make_icons.py
 产出：
-    src-tauri/icons/icon.ico          16 / 32 / 48 / 256 四个尺寸
-    src-tauri/icons/icon-preview.png  256px，用来预览和贴文档
+    app/icons/icon.ico          16 / 32 / 48 / 256 四个尺寸
+    app/icons/icon-preview.png  256px，用来预览和贴文档
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import struct
 import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ICON_DIR = os.path.join(ROOT, "src-tauri", "icons")
+ICON_DIR = os.path.join(ROOT, "app", "icons")
 
 BACKDROP = (31, 31, 36)  # #1F1F24
 BAR = (93, 202, 165)     # #5DCAA5

@@ -9,6 +9,7 @@ add_library(harmonica_shell STATIC
     paths.cpp
     library.cpp
     playersession.cpp
+    scoredoc.cpp
     hotkeys.cpp
     win32.cpp
     backend.cpp

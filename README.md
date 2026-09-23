@@ -14,9 +14,9 @@
   清单里写的是 `requireAdministrator`，**启动时**由 Windows 弹 UAC 提权，
   不需要进了界面再点按钮重启。代价是每次启动都会弹一次 UAC。
 
-## 当前状态：正在从 Tauri + Rust 重写成 C++ / Qt
+## 当前状态
 
-分五轮推进，每轮都要能独立构建：
+Rust + Tauri 那一版已经整个换成 C++ / Qt（QML）。当初分五轮推进，每轮都要能独立构建：
 
 | 轮 | 内容 | 状态 |
 | --- | --- | --- |
@@ -80,9 +80,8 @@ ctest --test-dir build --output-on-failure
 - **Debug 是控制台程序，Release 才是 GUI 程序。** QML 的报错只有 stderr 这一条通道，
   而 GUI 子系统收不到 —— 调试期没有控制台，`ApplicationWindow is not a type` 这类
   错误就表现为「程序起来了但屏幕上什么都没有」。
-- **发布要单独配一个 Release 目录**（`-B build-release -DCMAKE_BUILD_TYPE=Release`），
-  打包前 `windeployqt --release build-release\app\harmonica-player.exe`。
-  部署完之后把 Qt 从 PATH 上摘掉再跑一次，起来了才叫产物自足。
+- **发布要单独配一个 Release 目录**（`-B build-release -DCMAKE_BUILD_TYPE=Release`）。
+  部署和出安装包的完整步骤见「打包」一节 —— 那里有两个不能省的坑。
 
 **为什么是 MSVC**：换掉 GNU 工具链（WinLibs）是因为它会把自己的
 `default-manifest.o` 无条件塞进链接命令（specs 里 `%:if-exists(...)`，没有开关能关），

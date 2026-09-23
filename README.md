@@ -285,6 +285,41 @@ Rust 项目仍然依赖那个 `.bak`。）
 校准进行中，设置页会显示当前吹到第几个音位、是什么组合、实际按哪些键 ——
 音位的按下时刻取自动作表里的第 K 个 KeyDown，不在界面里算时间。
 
+## 打包（Inno Setup 7）
+
+安装包脚本是 `installer/harmonica-player.iss`，版本号不在里面写死，
+由命令行 `/DAppVersion=` 传（取 `CMakeLists.txt` 的 `project(... VERSION)`）。
+
+```bat
+:: 1) Release 构建：提权清单由 mt.exe 嵌在 exe 里，跟着 exe 走
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+       -DCMAKE_PREFIX_PATH=D:/Qt/6.11.2/msvc2022_64
+cmake --build build-release
+
+:: 2) 暂存一份干净目录（别直接打包 build-release 目录，里面混着 CMake 中间产物）
+copy build-releasepp\harmonica-player.exe  build-install\stagingxcopy /e /i build-releasepp\Harmonica      build-install\staging\Harmonica
+windeployqt --release --no-translations --compiler-runtime ^
+            --qmldir app\qml build-install\staging\harmonica-player.exe
+
+:: 3) 出安装包（在开发者命令行里，让 windeployqt 认得到 VC 运行库）
+"D:\Program Files\Inno Setup 7\ISCC.exe" /DAppVersion=0.3.0 installer\harmonica-player.iss
+```
+
+两个坑都踩过，别再省：
+
+- **`--qmldir app\qml` 不能省。** 我们的 QML 是编进 exe 资源的，windeployqt
+  只扫二进制时认不全 `QtQuick.Controls` 的样式模块；少了
+  `qml\QtQuick\Controls\Fusion` 和那几个 `Qt6QuickControls2*.dll`，
+  装完的程序会起一个白屏窗口。
+- **`Harmonica\` 目录必须和 exe 放在一起。** 少了它启动直接报
+  `Module "Harmonica" contains no type named "Main"`。
+  验证办法：把 `Qt` 从 `PATH` 上摘掉再跑暂存目录里那个 exe，起得来才算部署完整。
+
+`--compiler-runtime` 会把 `vc_redist.x64.exe` 放进暂存目录（要在开发者命令行里跑才拷得到）；
+安装包把它下到临时目录、注册表里查到已装就跳过，不会往 `{app}` 里塞。
+卸载**不会**删运行时长出来的 `harmonica.ini` 和 `songs\` —— 那是用户的东西。
+
+
 ## 简谱编辑器
 
 点按钮或敲键盘录入音符，所见即所得，最后导出成 `.dhs`。

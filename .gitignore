@@ -1,5 +1,6 @@
 build/
 build-*/
+build-install/
 .qt/
 *.user
 CMakeUserPreserve.txt

@@ -18,10 +18,10 @@ Window {
     color: "transparent"
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
 
-    // 进度不靠事件推 —— 演奏线程里那颗原子数是权威，界面按时轮询；
-    // 这里轮询还没接上（轮③），先把状态显示成空闲。
-    property string title_: ""
-    property int remainingSeconds: 0
+    // 进度是演奏线程里那颗原子数（权威值），后端每 100ms 读一次推给属性；
+    // 这里只做显示层的换算，不算任何时间。
+    readonly property bool active: Session.playing || Session.countingDown
+    readonly property int remainingSeconds: Math.max(0, Math.round(Session.remainingMs / 1000))
 
     Rectangle {
         anchors.fill: parent
@@ -43,7 +43,9 @@ Window {
                 spacing: 2
 
                 Text {
-                    text: root.title_.length > 0 ? root.title_ : "空闲"
+                    text: Session.countingDown
+                          ? "准备中，切回游戏…"
+                          : (root.active ? Session.title + (Session.dryRun ? "（干跑）" : "") : "空闲")
                     color: Backend.windowText
                     font.pixelSize: 14
                     font.weight: Font.DemiBold
@@ -58,7 +60,9 @@ Window {
             }
 
             Text {
-                text: root.remainingSeconds > 0 ? "-" + root.remainingSeconds + "s" : ""
+                text: Session.countingDown
+                      ? Session.countdownSecs
+                      : (root.active ? "-" + root.remainingSeconds + "s" : "")
                 color: Backend.accent
                 font.pixelSize: 18
                 font.weight: Font.DemiBold

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariantList>
 
 #include "palette.h"
 #include "paths.h"
@@ -37,6 +38,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString dirError READ dirError CONSTANT)
     /// 配置文件写不出去时的原因（同样是没写权限）；写不出去时设置改了不会留档
     Q_PROPERTY(QString configError READ configError CONSTANT)
+    /// 曲库里选中的那首（按文件名）。F9 演奏的就是它，所以放在后端而不是页面里
+    Q_PROPERTY(QString selectedFile READ selectedFile WRITE setSelectedFile NOTIFY selectionChanged)
 
     Q_PROPERTY(QColor windowBackground READ windowBackground CONSTANT)
     Q_PROPERTY(QColor windowText READ windowText CONSTANT)
@@ -55,6 +58,11 @@ public:
     [[nodiscard]] bool elevated() const;
     [[nodiscard]] QString dirError() const { return dirError_; }
     [[nodiscard]] QString configError() const { return configError_; }
+    [[nodiscard]] QString selectedFile() const { return selectedFile_; }
+    void setSelectedFile(QString file);
+
+    /// 扫演奏谱目录，返回曲库列表（含解析失败的那些）。时长的算法只有 core 那一份
+    Q_INVOKABLE QVariantList listSongs() const;
 
     [[nodiscard]] static QColor windowBackground() { return WINDOW_BACKGROUND; }
     [[nodiscard]] static QColor windowText() { return WINDOW_TEXT; }
@@ -74,10 +82,14 @@ public:
     Q_INVOKABLE void hideOverlay();
     Q_INVOKABLE bool openSongsFolder();
 
+signals:
+    void selectionChanged();
+
 private:
     Layout layout_;
     QString dirError_;
     QString configError_;
+    QString selectedFile_;
     bool elevated_ = false;
     QPointer<QWindow> overlay_;
     QPointer<QWindow> main_;

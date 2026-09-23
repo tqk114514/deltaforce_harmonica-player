@@ -16,8 +16,10 @@
 
 #include "backend.h"
 #include "config.h"
+#include "hotkeys.h"
 #include "input.h"
 #include "paths.h"
+#include "playersession.h"
 #include "win32.h"
 
 #ifndef HARMONICA_VERSION
@@ -96,6 +98,13 @@ int run(int argc, char** argv) {
     Backend backend{layout, dirError, configError};
     qmlRegisterSingletonInstance("Harmonica", 1, 0, "Backend", &backend);
 
+    PlayerSession session{layout};
+    qmlRegisterSingletonInstance("Harmonica", 1, 0, "Session", &session);
+    // 一场开始就把悬浮窗叫出来，结束（自然吹完 / 被停 / 倒数被取消）就收掉
+    QObject::connect(&session, &PlayerSession::started, &backend, [&backend] { backend.showOverlay(); });
+    QObject::connect(&session, &PlayerSession::finished, &backend,
+                     [&backend] { backend.hideOverlay(); });
+
     // 图标由 make_icons.py 生成、编进资源（见 app/CMakeLists.txt）；
     // 窗口图标和托盘图标用同一个 QIcon，不再准备第二份
     const QIcon icon{QStringLiteral(":/icons/icon.ico")};
@@ -107,6 +116,7 @@ int run(int argc, char** argv) {
     if (engine.rootObjects().isEmpty()) return -1;
 
     bool foundMain = false;
+    QWindow* mainWindow = nullptr;
     for (QObject* object : engine.rootObjects()) {
         auto* window = qobject_cast<QQuickWindow*>(object);
         if (window == nullptr) continue;
@@ -119,6 +129,7 @@ int run(int argc, char** argv) {
             window->hide();
         } else if (window->objectName() == QLatin1String(MAIN_OBJECT)) {
             foundMain = true;
+            mainWindow = window;
             backend.setMainWindow(window);
             window->installEventFilter(new HideOnClose{window});
             // 系统原生标题栏，只染颜色：按钮、拖拽、贴边、双击最大化全都保持原生行为
@@ -132,6 +143,19 @@ int run(int argc, char** argv) {
         qCritical("找不到主窗口（objectName=\"%s\"）—— QML 没加载成功", MAIN_OBJECT);
         return -1;
     }
+
+    // 热键绑在主窗口的句柄上：窗口收进托盘之后句柄仍然存在，所以照样收得到。
+    // 注册失败（被别的程序占了）只在控制台报一句，界面上的按钮照样能点。
+    auto* hotkeys = new Hotkeys{&application};
+    application.installNativeEventFilter(hotkeys);
+    hotkeys->registerTo(mainWindow);
+    QObject::connect(hotkeys, &Hotkeys::activated, &session, [&session, &backend](const QString& key) {
+        if (key == QLatin1String("F10")) {
+            session.stop();
+            return;
+        }
+        session.start(backend.selectedFile(), false);
+    });
 
     buildTray(application, backend, icon);
     return application.exec();

@@ -65,7 +65,14 @@ ApplicationWindow {
                     Layout.fillWidth: true
                 }
 
+                LibraryPage {
+                    visible: root.page === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+
                 PagePlaceholder {
+                    visible: root.page !== 0
                     title: "还没接上"
                     body: root.pages[root.page].todo
                     Layout.fillWidth: true

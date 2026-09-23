@@ -7,6 +7,9 @@ set(CMAKE_AUTOMOC ON)
 # 而测试没法从「一个可执行文件」里链接代码。
 add_library(harmonica_shell STATIC
     paths.cpp
+    library.cpp
+    playersession.cpp
+    hotkeys.cpp
     win32.cpp
     backend.cpp
 )
@@ -36,6 +39,7 @@ qt_add_qml_module(harmonica-player
         qml/Main.qml
         qml/Overlay.qml
         qml/Sidebar.qml
+        qml/LibraryPage.qml
         qml/PagePlaceholder.qml
 )
 

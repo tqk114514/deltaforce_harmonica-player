@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QWindow>
 
+#include "library.h"
 #include "win32.h"
 
 namespace harmonica::app {
@@ -44,6 +45,14 @@ void Backend::showMainWindow() {
     main_->show();
     main_->raise();
     win32::bringToForeground(main_);
+}
+
+QVariantList Backend::listSongs() const { return libraryAsVariantList(scanLibrary(layout_.dhsDir)); }
+
+void Backend::setSelectedFile(QString file) {
+    if (file == selectedFile_) return;
+    selectedFile_ = std::move(file);
+    emit selectionChanged();
 }
 
 bool Backend::openSongsFolder() { return win32::openPath(layout_.dhsDir); }

@@ -40,6 +40,11 @@ class Backend : public QObject {
     Q_PROPERTY(QString configError READ configError CONSTANT)
     /// 曲库里选中的那首（按文件名）。F9 演奏的就是它，所以放在后端而不是页面里
     Q_PROPERTY(QString selectedFile READ selectedFile WRITE setSelectedFile NOTIFY selectionChanged)
+    /// 设置页那两张卡的内容：键位名用**配置文件里那种名字**（`Z` / `COMMA` / `left`），
+    /// 不传真值码 —— 免得界面和 core 各维护一套编码
+    Q_PROPERTY(QVariantMap keyConfig READ keyConfig NOTIFY keyConfigChanged)
+    /// 上一次保存失败的原因；保存成功就清空
+    Q_PROPERTY(QString settingsError READ settingsError NOTIFY keyConfigChanged)
 
     Q_PROPERTY(QColor windowBackground READ windowBackground CONSTANT)
     Q_PROPERTY(QColor windowText READ windowText CONSTANT)
@@ -64,6 +69,18 @@ public:
     /// 扫演奏谱目录，返回曲库列表（含解析失败的那些）。时长的算法只有 core 那一份
     Q_INVOKABLE QVariantList listSongs() const;
 
+    [[nodiscard]] QVariantMap keyConfig() const { return keyConfig_; }
+    [[nodiscard]] QString settingsError() const { return settingsError_; }
+
+    /// 从磁盘重读一遍配置，刷新 `keyConfig`。起播前也走同样的路径，
+    /// 所以「界面上看到的」和「马上要按的」始终是同一份。
+    void reloadKeyConfig();
+
+    /// 保存设置页改的值，写回 `harmonica.ini`。
+    /// 校验一律走 core 自己的 `parseKeyName` / `parseButton` ——
+    /// **配置文件里能写什么，界面上就能填什么**，规则只留那一份。
+    Q_INVOKABLE bool saveKeyConfig(const QVariantMap& values);
+
     [[nodiscard]] static QColor windowBackground() { return WINDOW_BACKGROUND; }
     [[nodiscard]] static QColor windowText() { return WINDOW_TEXT; }
     [[nodiscard]] static QColor border() { return BORDER; }
@@ -84,12 +101,17 @@ public:
 
 signals:
     void selectionChanged();
+    void keyConfigChanged();
 
 private:
+    [[nodiscard]] QVariantMap readKeyConfig() const;
+
     Layout layout_;
     QString dirError_;
     QString configError_;
     QString selectedFile_;
+    QVariantMap keyConfig_;
+    QString settingsError_;
     bool elevated_ = false;
     QPointer<QWindow> overlay_;
     QPointer<QWindow> main_;

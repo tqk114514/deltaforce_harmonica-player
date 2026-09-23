@@ -1,8 +1,12 @@
 #include "playersession.h"
 
+#include <variant>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QStringList>
+#include <QVariantMap>
 
 #include "config.h"
 #include "input.h"
@@ -64,15 +68,71 @@ bool PlayerSession::start(const QString& file, bool dryRun) {
 
     actions_ = buildActions(*song, *config);
     config_ = *config;
-    dryRun_ = dryRun;
+    calibration_ = false;
+    calibrationSteps_.clear();
+    calibrationStarts_.clear();
 
+    const QString title = song->title.isEmpty() ? QFileInfo{file}.completeBaseName() : song->title;
+    beginRun(file, title, song->durationMs(), dryRun);
+    return true;
+}
+
+bool PlayerSession::startCalibration() {
+    auto config = Config::load(layout_.configFile);
+    if (!config) {
+        lastError_ = config.error();
+        emit statusChanged();
+        return false;
+    }
+
+    const Song song = harmonica::calibrationSong();
+    actions_ = buildActions(song, *config);
+    config_ = *config;
+
+    // 音位的按下时刻取自动作表里的第 K 个 KeyDown —— 每个音恰好产生一个 KeyDown，
+    // 所以这里不用再算一遍时间。两边对不上说明 core 改岔了，宁可不跑也别瞎指。
+    std::vector<double> starts;
+    for (const TimedAction& action : actions_) {
+        if (std::holds_alternative<KeyDown>(action.action)) starts.push_back(action.atMs);
+    }
+    const std::vector<CalibrationStep> steps = harmonica::calibrationSteps(*config);
+    if (starts.size() != steps.size()) {
+        lastError_ = QStringLiteral("校准音位和动作表对不上");
+        emit statusChanged();
+        return false;
+    }
+
+    calibrationStarts_ = starts;
+    QVariantList list;
+    for (std::size_t i = 0; i < steps.size(); ++i) {
+        QStringList buttons;
+        for (const MouseButton button : steps[i].buttons) buttons << buttonName(button);
+        list.push_back(QVariantMap{
+            {QStringLiteral("index"), static_cast<qlonglong>(i)},
+            {QStringLiteral("group"), steps[i].group},
+            {QStringLiteral("degree"), static_cast<int>(steps[i].degree)},
+            {QStringLiteral("key"), keyName(steps[i].vk)},
+            {QStringLiteral("buttons"), buttons},
+            {QStringLiteral("startMs"), starts[i]},
+        });
+    }
+    calibrationSteps_ = list;
+    calibration_ = true;
+
+    beginRun(QString(), song.title, song.durationMs(), false);
+    return true;
+}
+
+void PlayerSession::beginRun(const QString& file, const QString& title, double totalMs,
+                             bool dryRun) {
+    dryRun_ = dryRun;
     // 先把上一场收干净再起新的：旧线程的 ReleaseGuard 会先跑完，
-    // 按键不会被两场演奏交叉着按住。
+    // 按键不会被两场交叉着按住。
     stopAndJoin();
 
     file_ = file;
-    title_ = song->title.isEmpty() ? QFileInfo{file}.completeBaseName() : song->title;
-    totalMs_ = song->durationMs();
+    title_ = title;
+    totalMs_ = totalMs;
     progressMs_ = 0.0;
     lastError_.clear();
     sent_ = 0;
@@ -93,7 +153,6 @@ bool PlayerSession::start(const QString& file, bool dryRun) {
     }
     pollTimer_.start();
     emit statusChanged();
-    return true;
 }
 
 void PlayerSession::stop() {
@@ -159,9 +218,20 @@ void PlayerSession::finish() {
 
     if (worker_.joinable()) worker_.join();
     dryRun_ = false;
+    calibration_ = false;
 
     emit statusChanged();
     if (previous != State::Idle) emit finished();
+}
+
+int calibrationStepAt(const std::vector<double>& startMs, double progressMs) {
+    // 动作表是按时间排的，所以从前往后扫，最后一个「已经到点」的就是当前音位
+    int current = -1;
+    for (std::size_t i = 0; i < startMs.size(); ++i) {
+        if (startMs[i] > progressMs) break;
+        current = static_cast<int>(i);
+    }
+    return current;
 }
 
 }  // namespace harmonica::app

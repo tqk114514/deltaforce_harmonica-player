@@ -71,8 +71,14 @@ ApplicationWindow {
                     Layout.fillHeight: true
                 }
 
+                SettingsPage {
+                    visible: root.page === 2
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+
                 PagePlaceholder {
-                    visible: root.page !== 0
+                    visible: root.page === 1
                     title: "还没接上"
                     body: root.pages[root.page].todo
                     Layout.fillWidth: true

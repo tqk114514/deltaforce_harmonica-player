@@ -14,12 +14,17 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QVariantList>
 
 #include "config.h"
 #include "paths.h"
 #include "player.h"
 
 namespace harmonica::app {
+
+/// 进度对应到第几个校准音位：返回最后一个「按下时刻 <= 当前进度」的下标，
+/// 一个都还没到就返回 -1。时间到音位的换算**只有这一处**，界面不许自己数。
+int calibrationStepAt(const std::vector<double>& startMs, double progressMs);
 
 class PlayerSession : public QObject {
     Q_OBJECT
@@ -30,6 +35,13 @@ class PlayerSession : public QObject {
     Q_PROPERTY(int countdownSecs READ countdownSecs NOTIFY statusChanged)
     Q_PROPERTY(QString title READ title NOTIFY statusChanged)
     Q_PROPERTY(QString file READ file NOTIFY statusChanged)
+    /// 这一场是不是键位校准（校准没有文件，标题固定是「键位校准」）
+    Q_PROPERTY(bool calibration READ isCalibration NOTIFY statusChanged)
+    /// 校准的全部音位：组名、度数、实际按哪个键、按下时刻（毫秒）。
+    /// 按下时刻取自**动作表里的第 K 个 KeyDown**，不在界面那边重算时间
+    Q_PROPERTY(QVariantList calibrationSteps READ calibrationSteps NOTIFY statusChanged)
+    /// 当前吹到第几个音位；-1 = 还没开始
+    Q_PROPERTY(int currentStep READ currentStep NOTIFY statusChanged)
     /// 干跑：走同一条时间轴，但不发送任何输入
     Q_PROPERTY(bool dryRun READ isDryRun NOTIFY statusChanged)
     Q_PROPERTY(qreal totalMs READ totalMs NOTIFY statusChanged)
@@ -53,7 +65,16 @@ public:
     /// 立即停止。倒数中的话等于取消这一场
     Q_INVOKABLE void stop();
 
+    /// 键位校准：把 44 个音位按顺序各输入一遍。和演奏走同一条 `buildActions` 管道，
+    /// 所以校准听着对、演奏就对
+    Q_INVOKABLE bool startCalibration();
+
     [[nodiscard]] bool isPlaying() const { return state_ == State::Playing; }
+    [[nodiscard]] bool isCalibration() const { return calibration_; }
+    [[nodiscard]] QVariantList calibrationSteps() const { return calibrationSteps_; }
+    [[nodiscard]] int currentStep() const {
+        return calibrationStepAt(calibrationStarts_, progressMs_);
+    }
     [[nodiscard]] bool isCountingDown() const { return state_ == State::Countdown; }
     [[nodiscard]] int countdownSecs() const { return countdownLeft_; }
     [[nodiscard]] QString title() const { return title_; }
@@ -77,6 +98,8 @@ private:
     enum class State { Idle, Countdown, Playing };
 
     void stopAndJoin();
+    /// 挂上一场（演奏或校准共用）：先收干净上一场、复位统计，再决定倒数还是直接起
+    void beginRun(const QString& file, const QString& title, double totalMs, bool dryRun);
     void launchWorker();
     void onCountdownTick();
     void onPollTick();
@@ -90,6 +113,9 @@ private:
     State state_ = State::Idle;
     int countdownLeft_ = 0;
     bool dryRun_ = false;
+    bool calibration_ = false;
+    QVariantList calibrationSteps_;
+    std::vector<double> calibrationStarts_;
     QString title_;
     QString file_;
     qreal totalMs_ = 0.0;

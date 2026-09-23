@@ -40,6 +40,7 @@ qt_add_qml_module(harmonica-player
         qml/Overlay.qml
         qml/Sidebar.qml
         qml/LibraryPage.qml
+        qml/SettingsPage.qml
         qml/PagePlaceholder.qml
 )
 

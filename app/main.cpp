@@ -8,6 +8,8 @@
 #include <QEvent>
 #include <QIcon>
 #include <QMenu>
+#include <QPalette>
+#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QQmlApplicationEngine>
 #include <QSystemTrayIcon>
@@ -18,6 +20,7 @@
 #include "config.h"
 #include "hotkeys.h"
 #include "input.h"
+#include "palette.h"
 #include "paths.h"
 #include "playersession.h"
 #include "win32.h"
@@ -84,6 +87,23 @@ int run(int argc, char** argv) {
     application.setApplicationVersion(QStringLiteral(HARMONICA_VERSION));
     // 关掉所有窗口不等于退出：主窗口收进托盘，悬浮窗也是隐藏的
     application.setQuitOnLastWindowClosed(false);
+
+    // 控件不用 Windows 原生样式：它会把浅色的输入框画在深色底上，对高度也有自己的
+    // 主张（启动日志里那串 "implicit height is smaller than minimum height" 就是它报的）。
+    // 界面整体是自配的深色，所以用 Fusion，颜色还是从 palette.h 那一份取。
+    QQuickStyle::setStyle(QStringLiteral("Fusion"));
+    QPalette dark;
+    dark.setColor(QPalette::Window, WINDOW_BACKGROUND);
+    dark.setColor(QPalette::WindowText, WINDOW_TEXT);
+    dark.setColor(QPalette::Base, SURFACE);
+    dark.setColor(QPalette::Text, WINDOW_TEXT);
+    dark.setColor(QPalette::Button, SURFACE);
+    dark.setColor(QPalette::ButtonText, WINDOW_TEXT);
+    dark.setColor(QPalette::Highlight, ACCENT);
+    dark.setColor(QPalette::HighlightedText, WINDOW_BACKGROUND);
+    dark.setColor(QPalette::ToolTipBase, SURFACE);
+    dark.setColor(QPalette::ToolTipText, WINDOW_TEXT);
+    application.setPalette(dark);
 
     // 抢不到锁说明已经有一个在跑 —— 把它的窗口叫到前面，自己安静退出
     if (!win32::takeSingleInstanceLock()) {

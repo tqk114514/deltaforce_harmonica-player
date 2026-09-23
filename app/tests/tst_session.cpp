@@ -28,6 +28,8 @@ private slots:
     void stopDuringCountdownCancelsWithoutPlaying();
     void badFileNamesAreRejected();
     void replayReplacesTheRunningSession();
+    void calibrationUsesTheSamePipeline();
+    void stepIndexFollowsProgress();
 
 private:
     QTemporaryDir root_;
@@ -99,6 +101,45 @@ void TestPlayerSession::replayReplacesTheRunningSession() {
     QVERIFY(finished.wait(5000));
     QCOMPARE(finished.count(), 1);
     QVERIFY(!session_->isPlaying());
+}
+
+
+void TestPlayerSession::calibrationUsesTheSamePipeline() {
+    QVERIFY(session_->startCalibration());
+    QVERIFY(session_->isCalibration());
+    const QVariantList steps = session_->calibrationSteps();
+    QCOMPARE(steps.size(), 44);
+    QCOMPARE(steps.first().toMap().value(QStringLiteral("group")).toString(), QStringLiteral("不修饰"));
+    QCOMPARE(steps.first().toMap().value(QStringLiteral("key")).toString(), QStringLiteral("Z"));
+    // 前两组各 7 个音，第 15 个开始是降调组：要按住左键
+    const QVariantMap low = steps.at(14).toMap();
+    QCOMPARE(low.value(QStringLiteral("group")).toString(), QStringLiteral("降调"));
+    QCOMPARE(low.value(QStringLiteral("buttons")).toStringList(), QStringList{QStringLiteral("left")});
+    // 最后一个音位是 升调 + 半音 + 第 8 键
+    const QVariantMap last = steps.at(43).toMap();
+    QCOMPARE(last.value(QStringLiteral("key")).toString(), QStringLiteral("COMMA"));
+    QCOMPARE(last.value(QStringLiteral("buttons")).toStringList(),
+             (QStringList{QStringLiteral("right"), QStringLiteral("middle")}));
+    // 按下时刻不递减 —— 它们直接来自动作表，不是这里另算的
+    double previous = -1.0;
+    for (const QVariant& entry : steps) {
+        const double at = entry.toMap().value(QStringLiteral("startMs")).toDouble();
+        QVERIFY2(at > previous, "音位顺序不对");
+        previous = at;
+    }
+    QCOMPARE(session_->currentStep(), -1);
+    session_->stop();   // 还在倒数，停掉别真吹出去
+    QVERIFY(!session_->isCalibration());
+}
+
+void TestPlayerSession::stepIndexFollowsProgress() {
+    const std::vector<double> starts{0.0, 100.0, 250.0};
+    QCOMPARE(calibrationStepAt(starts, -1.0), -1);
+    QCOMPARE(calibrationStepAt(starts, 0.0), 0);
+    QCOMPARE(calibrationStepAt(starts, 99.9), 0);
+    QCOMPARE(calibrationStepAt(starts, 100.0), 1);
+    QCOMPARE(calibrationStepAt(starts, 10000.0), 2);
+    QCOMPARE(calibrationStepAt({}, 10.0), -1);
 }
 
 QTEST_GUILESS_MAIN(TestPlayerSession)

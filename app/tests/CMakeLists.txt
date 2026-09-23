@@ -1,7 +1,7 @@
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-foreach(case IN ITEMS paths win32 library session hotkeys)
+foreach(case IN ITEMS paths win32 library session hotkeys settings)
   add_executable(tst_shell_${case} tst_${case}.cpp)
   target_link_libraries(tst_shell_${case} PRIVATE harmonica_shell Qt6::Test)
   set_target_properties(tst_shell_${case} PROPERTIES WIN32_EXECUTABLE FALSE)

@@ -50,7 +50,9 @@ Item {
                 id: tabs
                 Layout.alignment: Qt.AlignVCenter
                 onCurrentIndexChanged: root.tab = currentIndex
-                TabButton { text: "本地曲库" }
+                // TabBar 把宽度平分给每个 TabButton（实测两档各 44px），所以标签长度要
+                // 对称：「本地曲库」配「社区」会把前者挤成省略号
+                TabButton { text: "本地" }
                 TabButton { text: "社区" }
             }
 
@@ -230,6 +232,8 @@ Item {
                         width: netList.width
                         height: 46
                         radius: 6
+                        // 不写 color 的 Rectangle 是纯白的，社区那一档整列会变成一块白底板
+                        color: "transparent"
 
                         RowLayout {
                             anchors.fill: parent

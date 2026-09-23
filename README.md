@@ -21,7 +21,7 @@
 | 轮 | 内容 | 状态 |
 | --- | --- | --- |
 | ① | `core/` 核心库 + QTest 全套不变量 | 已完成 |
-| ② | QML 外壳：两个窗口、托盘、单实例、启动即提权 | 待做 |
+| ② | QML 外壳：两个窗口、托盘、单实例、启动即提权 | 已完成 |
 | ③ | 曲库、演奏与干跑、悬浮窗进度、F9 / F10 | 待做 |
 | ④ | 设置页、键位校准（44 个音位） | 待做 |
 | ⑤ | 简谱编辑器（连音线 / 反复 / 转调 / 倚音 / 工程文件） | 待做 |
@@ -35,10 +35,16 @@
 | --- | --- |
 | `core/` | 核心库：谱面解析、键位映射、动作表、SendInput。**不含界面** |
 | `core/tests/` | 核心的不变量测试（Qt Test） |
-| `app/` | QML 界面（轮②起） |
+| `app/paths.*` | 目录约定：配置和曲谱只认 exe 旁边那一份（纯逻辑，被测着盯） |
+| `app/win32.*` | 单实例锁、悬浮窗不抢焦点、DWM 染色、提权检查、开资源管理器 |
+| `app/backend.*` | 给 QML 的后端对象：环境信息、悬浮窗开关；**不放任何时序计算** |
+| `app/palette.h` | 一套颜色，QML 和标题栏染色共用 |
+| `app/qml/` | 界面本体：`Main` / `Overlay` / `Sidebar` / 占位页 |
+| `app/app.manifest` | 应用清单模板，构建末尾由 `mt.exe` 按配置嵌进 exe |
+| `app/tests/` | 目录约定和 Win32 属性的测试 |
 | `songs/dhs` | 演奏谱（曲库扫这里） |
 | `songs/numbered_musical_notation` | 编辑器工程（`.score.json`） |
-| `tools/make_icons.py` | 生成应用图标，不依赖第三方库 |
+| `tools/make_icons.py` | 生成 `app/icons/icon.ico`，不依赖第三方库 |
 
 `harmonica.ini` **不在仓库里**：程序第一次启动时在 exe 旁边写一份带注释的默认配置，
 装到哪就是哪（见「曲谱目录」），所以也不存在「仓库里那份和线上那份不一样」。
@@ -61,6 +67,15 @@ ctest --test-dir build --output-on-failure
 直接跑测试程序也得让 `Qt6Core.dll` 在 PATH 上；CMake 已经把 Qt 的 bin 目录写进了
 每条测试的 `ENVIRONMENT`，从任何 shell 跑 `ctest` 都不用手工设。
 
+两个和构建配置绑在一起的决定：
+
+- **Debug 是控制台程序，Release 才是 GUI 程序。** QML 的报错只有 stderr 这一条通道，
+  而 GUI 子系统收不到 —— 调试期没有控制台，`ApplicationWindow is not a type` 这类
+  错误就表现为「程序起来了但屏幕上什么都没有」。
+- **发布要单独配一个 Release 目录**（`-B build-release -DCMAKE_BUILD_TYPE=Release`），
+  打包前 `windeployqt --release build-release\app\harmonica-player.exe`。
+  部署完之后把 Qt 从 PATH 上摘掉再跑一次，起来了才叫产物自足。
+
 **为什么是 MSVC**：换掉 GNU 工具链（WinLibs）是因为它会把自己的
 `default-manifest.o` 无条件塞进链接命令（specs 里 `%:if-exists(...)`，没有开关能关），
 而 GNU ld 不合并清单 —— 于是 exe 里同时躺着两份同 ID 的 `MANIFEST`：
@@ -70,8 +85,16 @@ ctest --test-dir build --output-on-failure
 MSVC 的链接器会正确合并清单，这条路径整个消失。轮②落地时会用 dumpbin 复核
 产物里只有一份清单、且是 `requireAdministrator`。
 
-清单本身也不用 `app.manifest` 文件了 —— 直接在链接选项里声明
-`/MANIFESTUAC:level=requireAdministrator`。
+清单还是用 `app/app.manifest`，但不是靠链接器选项：CMake 会在链接命令**末尾**补一个
+`/MANIFEST:NO`，而 `link.exe` 后写的生效，所以 `/MANIFEST:EMBED` + `/MANIFESTUAC:...`
+那条路会被静默盖掉（表现是清单没嵌进 exe，提权只存在于旁边那个 `.exe.manifest` 文件里，
+单独把 exe 拷走就失效）。现在的做法是配置期按构建类型生成清单、构建末尾用 `mt.exe`
+写进 exe 的 `#1` 资源 —— 有且只有一份。实测：Debug 产物 `asInvoker`，Release 产物
+`requireAdministrator`（`mt -inputresource:exe;#1` 能取出来，`#2` 不存在）。
+
+⚠️ `mt.exe` 的参数是 `文件;#1`，这个分号加井号在 CMake/Ninja/cmd 三层里都会被吃掉一层，
+所以构建里是配置期写一个一次性批处理来调它（见 `app/CMakeLists.txt` 那段注释）——
+别再试着把它写成 `target_link_options` 或 `VERBATIM` 参数。
 
 ### 曲谱目录
 

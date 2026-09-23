@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  应用清单模板：HARMONICA_UAC_LEVEL 由 CMake 按构建类型填进去。
+  Debug = asInvoker（开发期不弹 UAC），Release = requireAdministrator。
+
+  这份清单会被 mt.exe 嵌进 exe 的 #1 资源。它是**唯一**那份：CMake 传给链接器的
+  /MANIFEST:NO 让链接器不生成清单，所以不存在「两份同 ID 清单谁排在前面」的问题
+  —— 那正是以前 GNU 工具链上踩过的坑（README「为什么不用 MinGW 构建」）。
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="com.deltaforce.harmonica-player"
+                    version="@HARMONICA_MANIFEST_VERSION@" processorArchitecture="*"/>
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="@HARMONICA_UAC_LEVEL@" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+
+  <!-- Qt 的控件要 Common-Controls v6，漏了它会退回没有视觉样式的老外观 -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0"
+                        processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>

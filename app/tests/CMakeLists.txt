@@ -1,0 +1,10 @@
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+foreach(case IN ITEMS paths win32)
+  add_executable(tst_shell_${case} tst_${case}.cpp)
+  target_link_libraries(tst_shell_${case} PRIVATE harmonica_shell Qt6::Test)
+  set_target_properties(tst_shell_${case} PROPERTIES WIN32_EXECUTABLE FALSE)
+  add_test(NAME shell_${case} COMMAND tst_shell_${case})
+  set_tests_properties(shell_${case} PROPERTIES ENVIRONMENT "PATH=$<TARGET_FILE_DIR:Qt6::Core>;$ENV{PATH}")
+endforeach()

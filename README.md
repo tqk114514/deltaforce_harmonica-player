@@ -25,8 +25,7 @@
 | ③ | 曲库、演奏与干跑、悬浮窗进度、F9 / F10、发送统计 | 已完成 |
 | ③+ | 社区曲库（清单 / 时长 / 下载 / 校验都在 C++）与试听发声 | 已完成 |
 | ④ | 设置页、键位校准（44 个音位） | 已完成 |
-| ⑤a | 简谱编辑器的数据层（时值 / 连音线 / 反复 / 转调 / 倚音 / 两种文件格式） | 已完成 |
-| ⑤b | 简谱编辑器的界面（录入、点选、工具条、保存与导出） | 待做 |
+| ⑤ | 简谱编辑器：数据层（`scoredoc`）+ 编辑操作（`editorcontroller`）+ 界面（`EditorPage`） | 已完成 |
 
 试听发声也在 C++（`QAudioSink` + core 的 `preview_notes`），界面只调 `Preview.play(正文)`。
 
@@ -44,10 +43,11 @@
 | `app/playersession.*` | 演奏链路：起线程跑动作表、传「停」、读进度、报发送统计 |
 | `app/hotkeys.*` | F9 / F10 全局热键（`RegisterHotKey` + 原生事件过滤） |
 | `app/scoredoc.*` | 编辑器的数据层：谱面模型、时值 / 延音线合并 / 反复展开 / 转调折算 / 倚音借时值，`.score.json` 与 `.dhs` 双向，排版 |
+| `app/editorcontroller.*` | 编辑器的后端：持有当前谱子、把每次编辑落到音符数组上、文件与自动保存 |
+| `app/qml/` | 界面本体：`Main` / `Overlay` / `Sidebar` / `LibraryPage` / `EditorPage` / `NoteCell` / `SettingsPage` |
 | `app/win32.*` | 单实例锁、悬浮窗不抢焦点、DWM 染色、提权检查、开资源管理器 |
 | `app/backend.*` | 给 QML 的后端对象：环境信息、曲库列表、设置读写、悬浮窗开关；**不放任何时序计算** |
 | `app/palette.h` | 一套颜色，三个地方共用：QML 界面、控件调色板（Fusion 样式）、标题栏染色 |
-| `app/qml/` | 界面本体：`Main` / `Overlay` / `Sidebar` / 占位页 |
 | `app/app.manifest` | 应用清单模板，构建末尾由 `mt.exe` 按配置嵌进 exe |
 | `app/tests/` | 目录约定和 Win32 属性的测试 |
 | `songs/dhs` | 演奏谱（曲库扫这里） |
@@ -289,10 +289,12 @@ Rust 项目仍然依赖那个 `.bak`。）
 
 点按钮或敲键盘录入音符，所见即所得，最后导出成 `.dhs`。
 
-> 这一节是**编辑器的完整规格**，桌面版由轮⑤ 落地。原来那份单文件网页版
-> `简谱编辑器.html` 已随 Tauri 版一起删除（git 历史里还能翻到）。
-> 里面「浏览器合成音试听」「localStorage 自动保存」两条是网页实现方式的描述，
-> 桌面版会换成 Qt 的做法；其余每条都是要照做的行为。
+> 这一节是编辑器的规格，桌面版已经照着实现（`app/scoredoc` 是算法，
+> `app/editorcontroller` 是编辑操作，`app/qml/EditorPage.qml` 是界面）。
+> 两条实现方式换掉了：**试听**用 `QAudioSink`（不再依赖浏览器合成音）；
+> **自动保存**落在程序自己旁边的 `autosave.score.json`（不再是 localStorage，
+> 关程序时写、下次开自动恢复）。原来那份单文件网页版 `简谱编辑器.html`
+> 已随 Tauri 版一起删除，git 历史里还能翻到。
 
 - **时值**：四分 / 八分 / 十六分 / 三十二分，可加附点。
   减时线按简谱的写法连写：同一拍内、层数相同的相邻音符共用一条线，跨拍或跨小节断开

@@ -1,7 +1,7 @@
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-foreach(case IN ITEMS paths win32 library session hotkeys settings scoredoc community)
+foreach(case IN ITEMS paths win32 library session hotkeys settings scoredoc community editor)
   add_executable(tst_shell_${case} tst_${case}.cpp)
   target_link_libraries(tst_shell_${case} PRIVATE harmonica_shell Qt6::Test)
   # REQUIRE_OK / REQUIRE_MSG 这两个宏在 core/tests/testhelpers.h 里，

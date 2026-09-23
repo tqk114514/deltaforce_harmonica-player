@@ -12,6 +12,7 @@ add_library(harmonica_shell STATIC
     scoredoc.cpp
     community.cpp
     audio.cpp
+    editorcontroller.cpp
     hotkeys.cpp
     win32.cpp
     backend.cpp
@@ -45,6 +46,8 @@ qt_add_qml_module(harmonica-player
         qml/Overlay.qml
         qml/Sidebar.qml
         qml/LibraryPage.qml
+        qml/EditorPage.qml
+        qml/NoteCell.qml
         qml/SettingsPage.qml
         qml/PagePlaceholder.qml
 )

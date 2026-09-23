@@ -19,6 +19,7 @@
 #include "audio.h"
 #include "backend.h"
 #include "community.h"
+#include "editorcontroller.h"
 #include "config.h"
 #include "hotkeys.h"
 #include "input.h"
@@ -127,6 +128,13 @@ int run(int argc, char** argv) {
     qmlRegisterSingletonInstance("Harmonica", 1, 0, "Community", &community);
     PreviewPlayer preview;
     qmlRegisterSingletonInstance("Harmonica", 1, 0, "Preview", &preview);
+
+    EditorController editor{layout};
+    qmlRegisterSingletonInstance("Harmonica", 1, 0, "Editor", &editor);
+    // 关程序前把当前谱子存一份，下次开接着改 —— 浏览器时代那份 localStorage
+    // 自动保存的替代品，落在程序自己旁边
+    QObject::connect(&application, &QApplication::aboutToQuit, &editor,
+                     [&editor] { editor.autosave(); });
     // 一场开始就把悬浮窗叫出来，结束（自然吹完 / 被停 / 倒数被取消）就收掉
     QObject::connect(&session, &PlayerSession::started, &backend, [&backend] { backend.showOverlay(); });
     QObject::connect(&session, &PlayerSession::finished, &backend,

@@ -19,21 +19,9 @@ ApplicationWindow {
 
     // 页面顺序要和 Sidebar 的点击一致；todo 文案就是这一轮还没落地的东西
     readonly property var pages: [
-        {
-            label: "曲库",
-            todo: "本地 " + Backend.songsDir + " 与社区清单两档切换、试听与下载、"
-                  + "演奏与干跑、悬浮窗实时进度、F9 / F10 热键。轮③ 落地。"
-        },
-        {
-            label: "简谱编辑器",
-            todo: "录入音符、时值与八度、连音线、反复、转调、倚音、小节线，"
-                  + "保存 .score.json 工程、导出 .dhs。规格在 README「简谱编辑器」一节。轮⑤ 落地。"
-        },
-        {
-            label: "设置与校准",
-            todo: "改键位与时序并写回 harmonica.ini（认的键名和文件里完全一样），"
-                  + "以及 44 个音位的键位校准 —— 它和演奏走同一条动作表管道。轮④ 落地。"
-        }
+        { label: "曲库", todo: "" },
+        { label: "简谱编辑器", todo: "" },
+        { label: "设置与校准", todo: "" }
     ]
 
     ColumnLayout {
@@ -71,19 +59,19 @@ ApplicationWindow {
                     Layout.fillHeight: true
                 }
 
+                EditorPage {
+                    visible: root.page === 1
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+
                 SettingsPage {
                     visible: root.page === 2
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
 
-                PagePlaceholder {
-                    visible: root.page === 1
-                    title: "还没接上"
-                    body: root.pages[root.page].todo
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                }
+
             }
         }
 

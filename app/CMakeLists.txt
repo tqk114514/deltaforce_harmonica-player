@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Widgets Network Multimedia)
 
 # Backend 是 Q_OBJECT，QML 类型注册还要从它抽 metatype —— 没有 AUTOMOC 都不成立
 set(CMAKE_AUTOMOC ON)
@@ -10,6 +10,8 @@ add_library(harmonica_shell STATIC
     library.cpp
     playersession.cpp
     scoredoc.cpp
+    community.cpp
+    audio.cpp
     hotkeys.cpp
     win32.cpp
     backend.cpp
@@ -19,6 +21,8 @@ target_link_libraries(harmonica_shell PUBLIC
     harmonica::core
     Qt6::Core
     Qt6::Gui
+    Qt6::Network
+    Qt6::Multimedia
     user32.lib
     dwmapi.lib
     shell32.lib

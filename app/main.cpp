@@ -16,7 +16,9 @@
 #include <QWindow>
 #include <qqml.h>
 
+#include "audio.h"
 #include "backend.h"
+#include "community.h"
 #include "config.h"
 #include "hotkeys.h"
 #include "input.h"
@@ -120,6 +122,11 @@ int run(int argc, char** argv) {
 
     PlayerSession session{layout};
     qmlRegisterSingletonInstance("Harmonica", 1, 0, "Session", &session);
+
+    CommunityManager community{layout};
+    qmlRegisterSingletonInstance("Harmonica", 1, 0, "Community", &community);
+    PreviewPlayer preview;
+    qmlRegisterSingletonInstance("Harmonica", 1, 0, "Preview", &preview);
     // 一场开始就把悬浮窗叫出来，结束（自然吹完 / 被停 / 倒数被取消）就收掉
     QObject::connect(&session, &PlayerSession::started, &backend, [&backend] { backend.showOverlay(); });
     QObject::connect(&session, &PlayerSession::finished, &backend,

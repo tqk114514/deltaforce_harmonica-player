@@ -26,6 +26,7 @@ Rust + Tauri 那一版已经整个换成 C++ / Qt（QML）。当初分五轮推�
 | ③+ | 社区曲库（清单 / 时长 / 下载 / 校验都在 C++）与试听发声 | 已完成 |
 | ④ | 设置页、键位校准（44 个音位） | 已完成 |
 | ⑤ | 简谱编辑器：数据层（`scoredoc`）+ 编辑操作（`editorcontroller`）+ 界面（`EditorPage`） | 已完成 |
+| ⑥ | Inno Setup 安装包（见「打包」） | 已完成 |
 
 试听发声也在 C++（`QAudioSink` + core 的 `preview_notes`），界面只调 `Preview.play(正文)`。
 
@@ -296,7 +297,8 @@ cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release ^
 cmake --build build-release
 
 :: 2) 暂存一份干净目录（别直接打包 build-release 目录，里面混着 CMake 中间产物）
-copy build-releasepp\harmonica-player.exe  build-install\stagingxcopy /e /i build-releasepp\Harmonica      build-install\staging\Harmonica
+copy build-release\app\harmonica-player.exe  build-install\staging
+xcopy /e /i build-release\app\Harmonica      build-install\staging\Harmonica
 windeployqt --release --no-translations --compiler-runtime ^
             --qmldir app\qml build-install\staging\harmonica-player.exe
 
@@ -317,6 +319,24 @@ windeployqt --release --no-translations --compiler-runtime ^
 `--compiler-runtime` 会把 `vc_redist.x64.exe` 放进暂存目录（要在开发者命令行里跑才拷得到）；
 安装包把它下到临时目录、注册表里查到已装就跳过，不会往 `{app}` 里塞。
 卸载**不会**删运行时长出来的 `harmonica.ini` 和 `songs\` —— 那是用户的东西。
+
+### 装完 59M：暂存目录里砍掉了什么
+
+windeployqt 一股脑塞进来是 152M（含那个 18M 的运行库安装包），
+`.iss` 的 `Excludes` 把它压到 **59M**。每一项都是先按这份清单删一遍暂存目录、
+把程序跑起来看过才算数：界面渲染、Fusion 控件、社区曲库拉清单、试听发声全部正常。
+
+| 砍掉 | 体积 | 为什么能砍 |
+| --- | --- | --- |
+| `opengl32sw.dll` | 20M | 软件 OpenGL 回退；玩家机器有硬件 D3D11，走不到这里 |
+| `dxcompiler.dll` + `dxil.dll` | 16M | D3D12 的着色器编译器，默认后端是 D3D11 |
+| `d3dcompiler_47.dll` | 5M | Win10/11 的 `System32` 里本来就有同名文件 |
+| `av\*-61.dll` 等 ffmpeg 一套 + `multimedia\ffmpegmediaplugin.dll` | 19M | 只有 `QMediaPlayer` 用它；试听走 `QAudioSink`，用的是 `windowsmediaplugin` 那套原生后端 |
+| `Imagine` / `Material` / `Universal` / `FluentWinUI3` / `Windows` 五套样式（DLL + `qml\` 目录） | 13M | `main.cpp` 里写死了 `QQuickStyle::setStyle("Fusion")` |
+| `qmltooling\` | 1M | QML 调试器，只有开发时用 |
+
+再往下砍就要动真格了：剩下的 `Qt6Core`/`Gui`/`Qml`/`Quick` 加上 `qml\QtQuick` 是
+QML 程序本身，砍不动。
 
 
 ## 简谱编辑器
@@ -490,6 +510,15 @@ note_gap_ms=50
   后面的音会跑到修饰键前面按下，既串音又按在错误的音区上（`core/tests/tst_player.cpp`
   的 `tinyNotesStillGetReleased` 盯着它）。正常谱子里这条推迟不会发生，总时长不变。
 - **单声部**：口琴同时只能出一个音，谱子也按单声部处理。
+- **`Layout` 不套 `Layout`**：一个 Layout 直接挂在另一个 Layout 下面时，它自己写的
+  `Layout.preferredWidth` / `Layout.fillHeight` 一律不生效，改成从它自己的子项继承 fill 标记
+  （实测：侧栏子项写了 `Layout.fillWidth`，整条侧栏就被横向撑满，页面挤成三分之一宽，
+  而侧栏自己的 `fillHeight` 反而丢了）。所以 `Sidebar` 和页面区都用一层普通 `Item` 包着，
+  `Main.qml` 的上下切分干脆用 `anchors`。
+- **`Rectangle` 不写 `color` 是纯白的**：深色界面里两处踩过 —— 侧栏顶部那根 8px 的垫高块，
+  和社区曲库那一档的列表行，都会画成一条白带/一块白底板。
+- **`TabBar` 把宽度平分给每个 `TabButton`**（实测两档各 44px），所以标签长度要对称，
+  「本地曲库」配「社区」会把前者挤成省略号，这里就叫「本地 / 社区」。
 - **退出即释放**：停止、托盘退出、演奏线程异常收工，每条路径都过一遍 `ReleaseGuard`，
   鼠标键卡在按下状态会让整个系统点不动东西。
 

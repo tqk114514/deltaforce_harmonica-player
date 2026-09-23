@@ -56,9 +56,25 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; 暂存目录整个搬进 {app}，VC 运行库单独放：它是要「执行」的，不是程序文件
-Source: "{#StagingDir}\*"; DestDir: "{app}"; Excludes: "vc_redist.x64.exe"; \
-  Flags: ignoreversion recursesubdirs createallsubdirs
+;
+; 排除项都是实测砍出来的：把暂存目录照这份清单删一遍（152M → 59M），跑起来看
+; 界面渲染、Fusion 控件、社区曲库下载、试听发声全都正常，才写进这里。
+; 每一项的理由：
+;   opengl32sw.dll            软件 OpenGL 回退，玩家机器有硬件 D3D11，用不上
+;   dxcompiler.dll / dxil.dll D3D12 的着色器编译器，默认后端是 D3D11，走不到
+;   d3dcompiler_47.dll        Win10/11 的 System32 里自带同名文件
+;   av*-61.dll 等 ffmpeg 一套  只有 QMediaPlayer 用；试听走 QAudioSink，
+;                             用的是 multimedia\windowsmediaplugin 那套原生后端
+;   五套样式                   程序里写死了 QQuickStyle::setStyle("Fusion")
+;   qmltooling\               QML 调试器，只在开发时有用
+Source: "{#StagingDir}\*"; DestDir: "{app}"; Excludes: "vc_redist.x64.exe,opengl32sw.dll,dxcompiler.dll,dxil.dll,d3dcompiler_47.dll,avcodec-61.dll,avformat-61.dll,avutil-59.dll,swresample-5.dll,swscale-8.dll,multimedia\ffmpegmediaplugin.dll,qmltooling,Qt6QuickControls2Imagine.dll,Qt6QuickControls2ImagineStyleImpl.dll,Qt6QuickControls2Material.dll,Qt6QuickControls2MaterialStyleImpl.dll,Qt6QuickControls2Universal.dll,Qt6QuickControls2UniversalStyleImpl.dll,Qt6QuickControls2FluentWinUI3StyleImpl.dll,Qt6QuickControls2WindowsStyleImpl.dll,qml\QtQuick\Controls\Imagine,qml\QtQuick\Controls\Material,qml\QtQuick\Controls\Universal,qml\QtQuick\Controls\FluentWinUI3,qml\QtQuick\Controls\Windows"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StagingDir}\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
+; 示例谱：只在不存在时写进去（升级不覆盖用户自己改的），卸载也不碰
+Source: "..\songs\dhs\*.dhs"; DestDir: "{app}\songs\dhs"; \
+  Flags: onlyifdoesntexist uninsneveruninstall
+Source: "..\songs\numbered_musical_notation\*.score.json"; DestDir: "{app}\songs\numbered_musical_notation"; \
+  Flags: onlyifdoesntexist uninsneveruninstall
 
 [Dirs]
 ; 曲谱和配置都写在程序自己旁边。装到 Program Files 时即便是管理员也别去碰
